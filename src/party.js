@@ -159,7 +159,7 @@ V.pgame = (p) => {
       $('#gu').onclick = pUndo;
       $('#vsub').onclick = () => { if (P.finished) return; while (PG.P.darts.length && !PG.P.finished) pThrow(0, 0, true); if (!PG.P.darts.length) { pThrow(0, 0, true); pThrow(0, 0, true); pThrow(0, 0, true); } };
       $('#grules').onclick = () => showRules(P.mode);
-      $('#gx').onclick = () => { save(true); go('home'); };
+      $('#gx').onclick = () => modal(`<h2 class="bb">Spiel verlassen</h2><button class="btn" id="xp" style="margin-bottom:10px">⏸ Pausieren – später weiterspielen</button><button class="btn sec" id="xd" style="color:#f87171">🗑 Beenden ohne Wertung</button>`, (md, close) => { $('#xp', md).onclick = () => { close(); save(true); go('home'); }; $('#xd', md).onclick = () => { close(); discardGame('party'); }; });
       $('#gst').onclick = () => toast(g.hint ? g.hint(P) : 'Runde ' + P.round, 2200);
       if (p.fresh) { p.fresh = false; setTimeout(() => say((S.settings.caller === 'en' ? 'Game on! ' : 'Game on! ') + pName(playerById(P.players[0]))), 200); }
     }

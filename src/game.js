@@ -32,7 +32,7 @@ V.game = (p) => {
       $('#gu').onclick = undo;
       $('#vsub').onclick = () => { if (isBotTurn() || G.busy || G.m.finished || !controlsCurrent(G.m)) return; let r0, k = 0; do { r0 = throwDart(0, 0, null, true, true); } while (r0 && !r0.ended && ++k < 3); };
       $('#grules').onclick = () => showRules('x01');
-      $('#gx').onclick = () => { stopTimers(); save(true); go('home'); };
+      $('#gx').onclick = () => modal(`<h2 class="bb">Spiel verlassen</h2><button class="btn" id="xp" style="margin-bottom:10px">⏸ Pausieren – später weiterspielen</button><button class="btn sec" id="xd" style="color:#f87171">🗑 Beenden ohne Wertung</button>`, (md, close) => { $('#xp', md).onclick = () => { close(); stopTimers(); save(true); go('home'); }; $('#xd', md).onclick = () => { close(); stopTimers(); discardGame('x01').then(() => {}); }; });
       $('#gst').onclick = liveStats;
       $('#gset').onclick = quickSettings;
       if (p.fresh) { const sd = m.sides[m.cur.side]; setTimeout(() => say(CALL.first(sd.name), null, { flush: true }), 250); if (p.why) toast('🎯 ' + boardById(m.boardId).name + ' · ' + p.why, 2400); p.fresh = false; introBubble(); }
