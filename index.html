@@ -193,7 +193,7 @@ input[type=color]{width:44px;height:36px;border:0;border-radius:10px;background:
 /* ================= STORE ================= */
 const LS_KEY = 'dartsportz_v1';
 let mem = null;
-const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
+const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', voiceEngine: 'ai', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
 function loadStore() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) {}
@@ -403,9 +403,34 @@ try { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; } catch (e) {}
 function voicesFor(lang) { return voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(lang)); }
 function voiceScore(v) { const n = (v.name + ' ' + (v.voiceURI || '')).toLowerCase(); let s = 0; if (/premium/.test(n)) s += 50; if (/enhanced|erweitert|verbessert/.test(n)) s += 40; if (/siri/.test(n)) s += 35; if (/neural|natural|online/.test(n)) s += 30; if (/google/.test(n)) s += 20; if (/compact|kompakt|espeak/.test(n)) s -= 30; if (/(grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|albert|bad news)/.test(n)) s -= 100; return s; }
 function bestVoice(lang) { const key = lang === 'en' ? 'voiceEn' : 'voiceDe'; const list = voicesFor(lang); const chosen = S.settings[key] && list.find(v => v.voiceURI === S.settings[key]); if (chosen) return chosen; return list.sort((a, b) => voiceScore(b) - voiceScore(a))[0]; }
+/* ---------- Natürliche KI-Stimme (Piper, läuft offline im Browser) ---------- */
+const PIPER_VOICES = { de: 'de_DE-thorsten-medium', en: 'en_GB-alan-medium' };
+const PIPER = { mod: null, cache: new Map(), q: Promise.resolve(), tok: 0, ready: {} };
+async function piperMod() { if (!PIPER.mod) PIPER.mod = await import('https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm'); return PIPER.mod; }
+async function piperInstalled(lang) { if (PIPER.ready[lang]) return true; try { const m = await piperMod(); const st = await m.stored(); PIPER.ready[lang] = st.includes(PIPER_VOICES[lang]); } catch (e) { return false; } return PIPER.ready[lang]; }
+async function piperDownload(lang, onp) { const m = await piperMod(); await m.download(PIPER_VOICES[lang], p => onp && p.total && onp(p.loaded / p.total)); PIPER.ready[lang] = true; }
+async function piperBuffer(text, lang) {
+  const key = lang + '|' + text; if (PIPER.cache.has(key)) return PIPER.cache.get(key);
+  const m = await piperMod(); const wav = await m.predict({ text, voiceId: PIPER_VOICES[lang] });
+  const buf = await ac().decodeAudioData(await wav.arrayBuffer());
+  if (PIPER.cache.size > 300) PIPER.cache.delete(PIPER.cache.keys().next().value);
+  PIPER.cache.set(key, buf); return buf;
+}
+function piperPlay(buf, rate) { return new Promise(res => { const a = ac(); const s = a.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate || 1; const g = a.createGain(); g.gain.value = Math.min(1, S.settings.volume * 1.4); s.connect(g); g.connect(a.destination); s.onended = res; s.start(); setTimeout(res, buf.duration * 1000 / (rate || 1) + 300); }); }
+function piperSay(text, lang, opts) {
+  if (opts.flush) PIPER.tok++;
+  const tok = PIPER.tok; const p = piperBuffer(text, lang); p.catch(() => {});
+  PIPER.q = PIPER.q.then(async () => { if (tok !== PIPER.tok) return; try { const b = await p; if (tok === PIPER.tok) await piperPlay(b, opts.rate); } catch (e) { webSay(text, lang, opts); } });
+}
+// häufige Ansagen vorab berechnen, damit sie sofort kommen
+async function piperWarmup(lang) { try { for (const n of [180, 140, 100, 60, 45, 26, 0]) await piperBuffer(CALL.score(n), lang); } catch (e) {} }
 function say(text, lang, opts = {}) {
-  if (!('speechSynthesis' in window)) return;
   lang = lang || S.settings.caller; if (!lang || lang === 'off') return;
+  if (S.settings.voiceEngine === 'ai' && PIPER.ready[lang]) return piperSay(text, lang, opts);
+  webSay(text, lang, opts);
+}
+function webSay(text, lang, opts = {}) {
+  if (!('speechSynthesis' in window)) return;
   try {
     if (opts.flush) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -2168,13 +2193,27 @@ function settingsBlock() {
     ${sw('sound', 'Aufprall-Sound')}<div class="field"><label>Lautstärke</label><input type="range" min="0" max="1" step=".05" value="${s.volume}" data-vol></div>
     ${sw('zoom', 'Großansicht beim Wurf (Hintergrund unscharf)')}
     <div class="lbl">Ansager</div>${seg('caller', [['off', 'Aus'], ['de', 'Deutsch'], ['en', 'Englisch']])}
-    ${s.caller !== 'off' ? `<div class="field"><label>Stimme</label><select data-voice="${s.caller}">${voicesFor(s.caller).sort((a, b) => voiceScore(b) - voiceScore(a)).map(v => `<option value="${esc(v.voiceURI)}" ${bestVoice(s.caller) === v ? 'selected' : ''}>${esc(v.name)}${voiceScore(v) >= 30 ? ' ⭐' : ''}</option>`).join('') || '<option>Systemstimme</option>'}</select></div>` : ''}
+    ${s.caller !== 'off' ? `<div class="field"><label>Sprachausgabe</label><div class="seg" style="margin:0"><button data-s="voiceEngine" data-v="ai" class="${s.voiceEngine === 'ai' ? 'on' : ''}">🎙 Natürlich (KI)</button><button data-s="voiceEngine" data-v="device" class="${s.voiceEngine !== 'ai' ? 'on' : ''}">📱 Gerätestimme</button></div></div>` : ''}
+    ${s.caller !== 'off' && s.voiceEngine === 'ai' ? `<div class="card" style="background:var(--card2)" id="aiv"><b>KI-Stimme ${s.caller === 'en' ? 'Englisch' : 'Deutsch'}</b><div class="mut xs">Klingt wie ein echter Sprecher – auf iPhone und Android gleich. Einmaliger Download (ca. 60 MB, am besten im WLAN), danach auch offline.</div><div class="bar" style="margin:8px 0;display:none" id="aivb"><i style="width:0"></i></div><button class="btn sm" id="aivdl" style="margin-top:6px">Prüfe …</button></div>` : ''}
+    ${s.caller !== 'off' && s.voiceEngine !== 'ai' ? `<div class="field"><label>Stimme</label><select data-voice="${s.caller}">${voicesFor(s.caller).sort((a, b) => voiceScore(b) - voiceScore(a)).map(v => `<option value="${esc(v.voiceURI)}" ${bestVoice(s.caller) === v ? 'selected' : ''}>${esc(v.name)}${voiceScore(v) >= 30 ? ' ⭐' : ''}</option>`).join('') || '<option>Systemstimme</option>'}</select></div>` : ''}
     <button class="btn sm sec" data-test>🔊 Test</button> <button class="btn sm sec" data-vhelp>Natürlichere Stimme?</button>
     ${sw('botVoice', 'Bots sprechen (Sprachausgabe)')}${sw('vibrate', 'Vibration')}`;
 }
 function bindSettings(m) {
   on(m, '[data-s]', 'click', b => { S.settings[b.dataset.s] = b.dataset.v; save(); $$(`[data-s="${b.dataset.s}"]`, m).forEach(x => x.classList.toggle('on', x === b)); });
   on(m, '[data-sw]', 'click', b => { const k = b.dataset.sw; S.settings[k] = !S.settings[k]; b.classList.toggle('on', S.settings[k]); save(); });
+  const aiBox = $('#aiv', m);
+  if (aiBox) {
+    const lang = S.settings.caller, btn = $('#aivdl', m);
+    piperInstalled(lang).then(ok => { btn.textContent = ok ? '✅ Installiert – Test' : '⬇️ Stimme herunterladen'; btn.dataset.ok = ok ? 1 : ''; }).catch(() => { btn.textContent = 'Nicht verfügbar (offline?)'; });
+    btn.onclick = async () => {
+      if (btn.dataset.ok) { say(CALL.score(180), null, { flush: true }); return; }
+      btn.disabled = true; btn.textContent = 'Lade …'; const bar = $('#aivb', m); bar.style.display = 'block';
+      try { await piperDownload(lang, f => { bar.firstElementChild.style.width = Math.round(f * 100) + '%'; btn.textContent = 'Lade … ' + Math.round(f * 100) + '%'; }); btn.textContent = '✅ Installiert – Test'; btn.dataset.ok = 1; btn.disabled = false; piperWarmup(lang); say(CALL.score(180), null, { flush: true }); }
+      catch (e) { btn.disabled = false; btn.textContent = 'Fehler – nochmal versuchen'; toast('Download fehlgeschlagen: ' + (e.message || e), 3500); }
+    };
+  }
+  on(m, '[data-s="voiceEngine"]', 'click', () => { if (!m.closest('.modal-bg')) setTimeout(render, 10); });
   m.addEventListener('change', e => { const l = e.target.dataset.voice; if (l) { S.settings[l === 'en' ? 'voiceEn' : 'voiceDe'] = e.target.value; save(); say(CALL.score(180), null, { flush: true }); } });
   on(m, '[data-vhelp]', 'click', () => modal(`<h2 class="bb">Natürlichere Stimme</h2><p class="sm">Die App nutzt die Stimmen deines iPhones. Die Standardstimme klingt blechern – die besseren musst du einmal kostenlos laden:</p><ol class="sm" style="line-height:1.6"><li>Einstellungen → <b>Bedienungshilfen</b></li><li><b>Gesprochene Inhalte</b> → <b>Stimmen</b> → <b>Deutsch</b></li><li>z. B. <b>Anna (Premium)</b>, <b>Helena (Erweitert)</b> oder <b>Markus (Erweitert)</b> laden</li><li>App neu öffnen und hier unter „Stimme“ auswählen (⭐ = hohe Qualität)</li></ol><p class="sm mut">Für Englisch genauso, z. B. „Daniel (Premium)“ – klingt wie ein echter Caller.</p><button class="btn" onclick="this.closest('.modal-bg').remove()">Alles klar</button>`));
   on(m, '[data-s="caller"]', 'click', () => { const bg = m.closest('.modal-bg'); if (!bg) setTimeout(render, 10); });
@@ -2209,6 +2248,7 @@ function loadStoreFrom(d) { const x = Object.assign({}, d); x.players = x.player
 /* ================= START ================= */
 document.addEventListener('click', () => ac(), { once: true });
 cloudInit();
+setTimeout(() => { const l = S.settings.caller; if (S.settings.voiceEngine === 'ai' && l && l !== 'off') piperInstalled(l).then(ok => ok && piperWarmup(l)); }, 2500);
 try { const cq = new URLSearchParams(location.search).get('chat'); if (cq && me()) route = { name: 'chatroom', p: { fid: cq } }; } catch (e) {}
 try { if (!me() && new URLSearchParams(location.search).get('invite')) route = { name: 'account', p: { mode: 'reg' } }; } catch (e) {}
 render();

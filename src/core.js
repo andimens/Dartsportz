@@ -2,7 +2,7 @@
 /* ================= STORE ================= */
 const LS_KEY = 'dartsportz_v1';
 let mem = null;
-const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
+const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', voiceEngine: 'ai', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
 function loadStore() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) {}
@@ -212,9 +212,34 @@ try { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; } catch (e) {}
 function voicesFor(lang) { return voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(lang)); }
 function voiceScore(v) { const n = (v.name + ' ' + (v.voiceURI || '')).toLowerCase(); let s = 0; if (/premium/.test(n)) s += 50; if (/enhanced|erweitert|verbessert/.test(n)) s += 40; if (/siri/.test(n)) s += 35; if (/neural|natural|online/.test(n)) s += 30; if (/google/.test(n)) s += 20; if (/compact|kompakt|espeak/.test(n)) s -= 30; if (/(grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|albert|bad news)/.test(n)) s -= 100; return s; }
 function bestVoice(lang) { const key = lang === 'en' ? 'voiceEn' : 'voiceDe'; const list = voicesFor(lang); const chosen = S.settings[key] && list.find(v => v.voiceURI === S.settings[key]); if (chosen) return chosen; return list.sort((a, b) => voiceScore(b) - voiceScore(a))[0]; }
+/* ---------- Natürliche KI-Stimme (Piper, läuft offline im Browser) ---------- */
+const PIPER_VOICES = { de: 'de_DE-thorsten-medium', en: 'en_GB-alan-medium' };
+const PIPER = { mod: null, cache: new Map(), q: Promise.resolve(), tok: 0, ready: {} };
+async function piperMod() { if (!PIPER.mod) PIPER.mod = await import('https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm'); return PIPER.mod; }
+async function piperInstalled(lang) { if (PIPER.ready[lang]) return true; try { const m = await piperMod(); const st = await m.stored(); PIPER.ready[lang] = st.includes(PIPER_VOICES[lang]); } catch (e) { return false; } return PIPER.ready[lang]; }
+async function piperDownload(lang, onp) { const m = await piperMod(); await m.download(PIPER_VOICES[lang], p => onp && p.total && onp(p.loaded / p.total)); PIPER.ready[lang] = true; }
+async function piperBuffer(text, lang) {
+  const key = lang + '|' + text; if (PIPER.cache.has(key)) return PIPER.cache.get(key);
+  const m = await piperMod(); const wav = await m.predict({ text, voiceId: PIPER_VOICES[lang] });
+  const buf = await ac().decodeAudioData(await wav.arrayBuffer());
+  if (PIPER.cache.size > 300) PIPER.cache.delete(PIPER.cache.keys().next().value);
+  PIPER.cache.set(key, buf); return buf;
+}
+function piperPlay(buf, rate) { return new Promise(res => { const a = ac(); const s = a.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate || 1; const g = a.createGain(); g.gain.value = Math.min(1, S.settings.volume * 1.4); s.connect(g); g.connect(a.destination); s.onended = res; s.start(); setTimeout(res, buf.duration * 1000 / (rate || 1) + 300); }); }
+function piperSay(text, lang, opts) {
+  if (opts.flush) PIPER.tok++;
+  const tok = PIPER.tok; const p = piperBuffer(text, lang); p.catch(() => {});
+  PIPER.q = PIPER.q.then(async () => { if (tok !== PIPER.tok) return; try { const b = await p; if (tok === PIPER.tok) await piperPlay(b, opts.rate); } catch (e) { webSay(text, lang, opts); } });
+}
+// häufige Ansagen vorab berechnen, damit sie sofort kommen
+async function piperWarmup(lang) { try { for (const n of [180, 140, 100, 60, 45, 26, 0]) await piperBuffer(CALL.score(n), lang); } catch (e) {} }
 function say(text, lang, opts = {}) {
-  if (!('speechSynthesis' in window)) return;
   lang = lang || S.settings.caller; if (!lang || lang === 'off') return;
+  if (S.settings.voiceEngine === 'ai' && PIPER.ready[lang]) return piperSay(text, lang, opts);
+  webSay(text, lang, opts);
+}
+function webSay(text, lang, opts = {}) {
+  if (!('speechSynthesis' in window)) return;
   try {
     if (opts.flush) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
