@@ -3,7 +3,7 @@ let G = null; // {m, hist, mult, busy, timers, stuckVisit}
 function launchMatch(sides, settings, starter, extra = {}) {
   const bc = extra.boardId ? { id: extra.boardId } : chooseBoard(sides);
   const m = createMatch({ sides, settings, boardId: bc.id, starter, career: extra.career });
-  S.active = m; save(true);
+  setActive(m); save(true);
   go('game', { fresh: true, why: bc.why });
 }
 const ANIM_MS = { off: 0, fast: 200, normal: 380, slow: 650 };
@@ -42,6 +42,13 @@ V.game = (p) => {
   };
 };
 function dLabelFull(n, m) { return n === 0 ? 'Daneben' : n === 25 ? (m === 2 ? 'Bull · 50' : 'Outer · 25') : (m === 3 ? 'Triple ' : m === 2 ? 'Double ' : '') + n + (m > 1 ? ' · ' + n * m : ''); }
+function setActive(m) {
+  S.paused = (S.paused || []).filter(x => x.id !== m.id && !x.finished);
+  if (S.active && S.active.id !== m.id && !S.active.finished) S.paused.unshift(S.active);
+  S.active = m; G = null;
+  if (m.live && typeof LIVE !== 'undefined') { LIVE.id = m.liveId; LIVE.version = m._v || 0; LIVE.host = AUTH.user && m.hostUid === AUTH.user.id; }
+}
+function resumeGame(id) { if (S.active && S.active.id === id) return go('game', { resume: true }); const m = (S.paused || []).find(x => x.id === id); if (!m) return; setActive(m); save(true); go('game', { resume: true }); }
 function stopTimers() { G && G.timers.forEach(clearTimeout); if (G) { G.timers = []; G.busy = false; } }
 function isBotTurn() { const m = G.m; return !m.finished && !!m.sides[m.cur.side].bot; }
 function keysHTML(mu) { return Array.from({ length: 20 }, (_, i) => { const n = i + 1; return `<button class="key" data-n="${n}">${mu === 1 ? n : `<b>${n * mu}</b><small>${mu === 2 ? 'D' : 'T'}${n}</small>`}</button>`; }).join(''); }
@@ -227,7 +234,7 @@ function finishMatch() {
       const sides = m.sides.map(s => ({ ...s, members: [...s.members] }));
       const bc = chooseBoard(sides, m.boardId);
       const mm = createMatch({ sides, settings: m.settings, boardId: bc.id, starter: (m.startSide + 1) % sides.length, career: m.career });
-      S.active = mm; save(true); go('game', { fresh: true, why: bc.why });
+      setActive(mm); save(true); go('game', { fresh: true, why: bc.why });
     };
   }), 900);
 }

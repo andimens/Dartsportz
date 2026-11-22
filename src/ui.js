@@ -58,7 +58,7 @@ V.home = () => {
   return {
     title: '', left: `<div class="logo"><svg width="34" height="34" viewBox="0 0 24 24" fill="#ff6b00"><path d="M4 4h9a8 8 0 1 1 0 16H4zm9 4a4 4 0 1 0 3.9 5H13v-2h3.9A4 4 0 0 0 13 8z"/></svg><b>DARTS<span>PORTZ</span></b></div>`,
     html: `<div class="row card" style="background:none;padding:6px 2px" data-go="user">${avatar(p)}<div class="sp"><div style="font-size:22px;font-weight:800">${esc(p.name)} <span class="flag">${flag(p.country)}</span></div><div class="row" style="gap:6px"><span class="bb" style="font-size:30px;color:var(--or)">${fmt(st.avg)}</span><span class="mut sm">Ø 3-Dart · ${st.matches} Spiele</span></div></div>${p.admin ? '<span class="badge or">ADMIN</span>' : ''}</div>
-    ${S.active ? `<button class="card row swipe" style="width:100%;border:1px solid var(--or)" data-resume data-kill="x01"><span style="font-size:26px">⏯</span><div class="sp" style="text-align:left"><b>Spiel fortsetzen</b><div class="mut sm">${esc(S.active.sides.map(s => s.name).join(' vs '))}</div></div><span class="mut">›</span></button>` : ''}
+    ${[S.active, ...(S.paused || [])].filter(Boolean).map((g, i) => `<button class="card row swipe" style="width:100%;border:1px solid ${i === 0 && g === S.active ? 'var(--or)' : '#3a3a40'}" data-resume="${g.id}" data-kill="${g.id}"><span style="font-size:26px">${g.live ? '📡' : g.career ? '🏆' : '⏯'}</span><div class="sp" style="text-align:left"><b>${g.live ? 'Online-Spiel' : g.career ? 'Karriere L' + g.career : 'Spiel'} fortsetzen</b><div class="mut sm">${esc(g.sides.map(s => s.name).join(' vs '))} · ${g.cur.rem.join(' : ')}</div></div><span class="mut">›</span></button>`).join('')}
     <div class="grid2"><button class="tile t-or" data-go="play"><span class="em">🎯</span><h3 class="bb">LOKAL<br>SPIELEN</h3><p>Allein, mit Freunden, Teams oder gegen den Bot</p></button>
     <button class="tile t-or2" data-go="friends"><span class="em">🌍</span><h3 class="bb">ONLINE<br>SPIELEN</h3><p>${AUTH.user ? AUTH.friends.length + ' Freunde · Live-Sync & Chat' : 'Login, Freunde, Live-Sync & Chat'}</p></button></div>
     ${S.pactive ? `<button class="card row swipe" style="width:100%;border:1px solid var(--or)" data-presume data-kill="party"><span style="font-size:26px">⏯</span><div class="sp" style="text-align:left"><b>${PARTY[S.pactive.mode].name} fortsetzen</b><div class="mut sm">${esc(S.pactive.players.map(id => pName(playerById(id))).join(', '))}</div></div><span class="mut">›</span></button>` : ''}
@@ -68,7 +68,7 @@ V.home = () => {
     <button class="tile t-gr" data-go="stats"><span class="em">📈</span><h3 class="bb">STATISTIK</h3><p>Average, Checkout, Heatmap, Bilanz</p></button></div>`,
     mount(r) {
       on(r, '[data-go]', 'click', b => go(b.dataset.go));
-      on(r, '[data-resume]', 'click', b => { if (!b._sw) go('game', { resume: true }); });
+      on(r, '[data-resume]', 'click', b => { if (!b._sw) resumeGame(b.dataset.resume); });
       on(r, '[data-presume]', 'click', b => { if (!b._sw) go('pgame', {}); });
       $$('.swipe', r).forEach(el => bindSwipe(el, () => discardGame(el.dataset.kill)));
       on(r, '[data-online]', 'click', () => modal(`<h2 class="bb">Online spielen</h2><p class="mut">Live-Synchronisation, Freundesliste, Einladungslinks und Push-Benachrichtigungen kommen mit der Supabase-Anbindung in Schritt 2. Bis dahin läuft alles lokal und offline.</p><button class="btn" onclick="this.closest('.modal-bg').remove()">Alles klar</button>`));
@@ -238,6 +238,13 @@ async function discardGame(kind) {
   const ok = await confirmBox('Spiel beenden? Es wird nicht gewertet.', 'Beenden');
   if (!ok) return render();
   if (kind === 'party') { S.pactive = null; PG = null; }
-  else { if (S.active && S.active.live && typeof liveSetStatus === 'function') { LIVE.id = S.active.liveId; liveSetStatus('cancelled'); LIVE.id = null; } S.active = null; G = null; }
+  else {
+    const id = kind === 'x01' ? (S.active && S.active.id) : kind;
+    const g = [S.active, ...(S.paused || [])].find(x => x && x.id === id);
+    if (g && g.live && online()) sb.from('live_games').update({ status: 'cancelled' }).eq('id', g.liveId).then(() => {});
+    if (g && g.live && LIVE.id === g.liveId) LIVE.id = null;
+    if (S.active && S.active.id === id) { S.active = null; G = null; }
+    S.paused = (S.paused || []).filter(x => x.id !== id);
+  }
   save(true); toast('Spiel verworfen – nichts gespeichert'); render();
 }

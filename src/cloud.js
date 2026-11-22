@@ -38,10 +38,11 @@ async function onLogin() {
   if (st && st.value && !mp.admin) { S.settings.boardSounds = st.value; save(); }
   await loadFriends(); subscribeAll(); flushQueue(); AUTH.ready = true;
   // laufendes Live-Spiel nach Neustart wieder verbinden
-  if (S.active && S.active.live && S.active.liveId) {
-    LIVE.id = S.active.liveId; LIVE.host = S.active.hostUid === uidv; LIVE.version = S.active._v || 0;
+  const lm = [S.active, ...(S.paused || [])].find(x => x && x.live && x.liveId && !x.finished);
+  if (lm) {
+    LIVE.id = lm.liveId; LIVE.host = lm.hostUid === uidv; LIVE.version = lm._v || 0;
     const { data: row } = await sb.from('live_games').select('*').eq('id', LIVE.id).maybeSingle();
-    if (!row || row.status === 'cancelled') { S.active = null; LIVE.id = null; save(); }
+    if (!row || row.status === 'cancelled') { if (S.active === lm) S.active = null; S.paused = (S.paused || []).filter(x => x !== lm); LIVE.id = null; save(); }
     else if (row.version > LIVE.version) applyRemote(row);
   }
   if (['account', 'home', 'friends'].includes(route.name)) render();
@@ -133,7 +134,7 @@ async function startLiveMatch(sides, settings, starter) {
   if (error) return toast('Fehler: ' + error.message, 3500);
   m.liveId = data.id; LIVE.id = data.id; LIVE.version = 0; LIVE.host = true;
   uids.filter(x => x !== AUTH.user.id).forEach(x => sendPush(x, '🎯 ' + me().name + ' fordert dich heraus!', `${settings.start} · First to ${settings.count} – tippe zum Annehmen`, '/', 'live'));
-  S.active = m; save(true);
+  setActive(m); save(true);
   const names = AUTH.friends.filter(f => uids.includes(f.id)).map(f => f.name).join(', ');
   const close = modal(`<div style="text-align:center;font-size:50px" class="pulse">📡</div><h2 class="bb">Warte auf ${esc(names)}…</h2><p class="mut sm" style="text-align:center">Einladung gesendet. Sobald angenommen wird, startet das Spiel automatisch.</p><button class="btn sec" id="lgo">Trotzdem starten</button><button class="btn ghost" id="lx" style="margin-top:8px">Abbrechen</button>`, (md, c) => {
     $('#lgo', md).onclick = () => { c(); LIVE.waitClose = null; liveSetStatus('running'); hostSpin(); };
@@ -158,10 +159,11 @@ function onLiveChange(row) {
   if (LIVE.waitingSpin && row.state && row.state.match && row.state.match.spin) {
     LIVE.waitingSpin = false; if (LIVE.spinClose) { LIVE.spinClose(); LIVE.spinClose = null; }
     LIVE.version = row.version; mergeRemotePlayers(row.state.players);
-    S.active = Object.assign(row.state.match, { liveId: row.id }); save(true); G = null;
+    setActive(Object.assign(row.state.match, { liveId: row.id })); save(true);
     spinWheel(S.active.sides, () => go('game', { fresh: true }), row.state.match.spin.win, true); return;
   }
   if (LIVE.waitingSpin) return;
+  if (row.status === 'cancelled' && (S.paused || []).some(x => x.liveId === row.id)) { S.paused = S.paused.filter(x => x.liveId !== row.id); save(); if (route.name === 'home') render(); }
   if (row.status === 'cancelled' && route.name === 'game' && S.active && S.active.liveId === row.id) { toast('Gegner hat das Spiel beendet'); S.active = null; LIVE.id = null; G = null; save(); go('home'); return; }
   if (row.status === 'cancelled' && LIVE.waitClose) { LIVE.waitClose(); LIVE.waitClose = null; toast('Einladung abgelehnt'); S.active = null; save(); return; }
   if (row.version > LIVE.version && row.state && row.state.match) applyRemote(row);
@@ -173,7 +175,7 @@ function joinLive(row) {
   const mine = row.state.players.find(p => p.uid === AUTH.user.id);
   if (mine && mine.id !== S.me) { S.aliases = S.aliases || {}; S.aliases[mine.id] = S.me; }
   LIVE.id = row.id; LIVE.version = row.version; LIVE.host = false;
-  S.active = Object.assign(row.state.match, { liveId: row.id }); save(true); G = null;
+  setActive(Object.assign(row.state.match, { liveId: row.id })); LIVE.version = row.version; save(true);
   LIVE.waitingSpin = true;
   LIVE.spinClose = modal(`<div style="text-align:center;font-size:50px" class="pulse">🎡</div><h2 class="bb">Gleich wird ausgelost …</h2><p class="mut sm" style="text-align:center">Das Rad dreht sich gleich bei euch beiden.</p>`);
 }
@@ -201,6 +203,7 @@ function dartCount(m) { return m.legs.reduce((a, l) => a + l.visits.reduce((b, v
 function applyRemote(row) {
   LIVE.version = row.version; if (row.state && row.state.match) row.state.match._v = row.version;
   const nm = row.state.match; mergeRemotePlayers(row.state.players);
+  if (!S.active || S.active.liveId !== row.id) { const i = (S.paused || []).findIndex(x => x.liveId === row.id); if (i >= 0) { S.paused[i] = Object.assign(nm, { liveId: row.id }); save(); } return; }
   const old = S.active; S.active = Object.assign(nm, { liveId: row.id });
   if (route.name !== 'game' || !G) { save(); return; }
   const before = old ? dartCount(old) : 0, after = dartCount(nm);
