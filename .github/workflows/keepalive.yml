@@ -11,8 +11,9 @@ jobs:
     steps:
       - name: Supabase anpingen
         run: |
-          curl -sf "${{ secrets.SUPABASE_URL }}/rest/v1/keepalive?select=id" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" && echo "Supabase ist wach"
+          code=$(curl -s -o body.txt -w "%{http_code}" "${{ secrets.SUPABASE_URL }}/rest/v1/keepalive?select=id" -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}")
+          echo "HTTP $code"; cat body.txt; echo
+          [ "$code" = "200" ] && echo "Supabase ist wach"
       - uses: actions/checkout@v4
       - name: Monatlicher Commit (verhindert, dass GitHub den Zeitplan nach 60 Tagen abschaltet)
         run: |
