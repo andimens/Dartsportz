@@ -178,3 +178,4 @@ input[type=color]{width:44px;height:36px;border:0;border-radius:10px;background:
 .chat-msg{max-width:80%;padding:9px 12px;border-radius:16px;margin:4px 0;background:var(--card2)}
 
 .nb{position:absolute;top:0;right:8px;min-width:18px;height:18px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;font-style:normal;font-weight:800;display:none;place-items:center;padding:0 4px}
+.pad.locked .keys,.pad.locked .mrow,.pad.locked .brow{opacity:.45;pointer-events:none;transition:opacity .1s}

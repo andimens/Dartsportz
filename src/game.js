@@ -24,13 +24,13 @@ V.game = (p) => {
     <div class="brow"><button id="gu">↶</button><button class="miss" id="gm">FALSCH</button><button id="grules">?</button></div></div></div>`,
     mount(r) {
       sizeBoard(); renderGame();
-      const press = (n, mu) => { if (G.busy || isBotTurn()) return; if (!controlsCurrent(G.m)) return toast('Warte auf ' + pName(playerById(curPid(G.m))) + ' …'); vibrate(8); throwDart(n, mu, null, true); };
+      const press = (n, mu) => { if (inputLocked() || G.busy || isBotTurn()) return; if (!controlsCurrent(G.m)) return toast('Warte auf ' + pName(playerById(curPid(G.m))) + ' …'); vibrate(8); throwDart(n, mu, null, true); };
       on(r, '[data-n]', 'click', b => press(+b.dataset.n, G.mult));
       on(r, '[data-b]', 'click', b => press(25, b.dataset.b === '50' ? 2 : 1));
       on(r, '[data-mu]', 'click', b => { G.mult = +b.dataset.mu; renderMult(); });
       $('#gm').onclick = () => press(0, 0);
       $('#gu').onclick = undo;
-      $('#vsub').onclick = () => { if (isBotTurn() || G.busy || G.m.finished || !controlsCurrent(G.m)) return; let r0, k = 0; do { r0 = throwDart(0, 0, null, true, true); } while (r0 && !r0.ended && ++k < 3); };
+      $('#vsub').onclick = () => { if (inputLocked() || isBotTurn() || G.busy || G.m.finished || !controlsCurrent(G.m)) return; let r0, k = 0; do { r0 = throwDart(0, 0, null, true, true); } while (r0 && !r0.ended && ++k < 3); };
       $('#grules').onclick = () => showRules('x01');
       $('#gx').onclick = () => modal(`<h2 class="bb">Spiel verlassen</h2><button class="btn" id="xp" style="margin-bottom:10px">⏸ Pausieren – später weiterspielen</button><button class="btn sec" id="xd" style="color:#f87171">🗑 Beenden ohne Wertung</button>`, (md, close) => { $('#xp', md).onclick = () => { close(); stopTimers(); save(true); go('home'); }; $('#xd', md).onclick = () => { close(); stopTimers(); discardGame('x01').then(() => {}); }; });
       $('#gst').onclick = liveStats;
@@ -117,10 +117,18 @@ function zoomShow(boardId, prevDarts, pid, label) {
   return zin;
 }
 function zoomHide(delay) { clearTimeout(ZOOM.t); ZOOM.t = setTimeout(() => { const z = $('#zoom'); if (!z) return; z.classList.remove('on'); ZOOM.r = setTimeout(() => z.remove(), 180); }, delay); }
+let INPUT_LOCK = 0, lockT = null;
+function lockInput(ms) {
+  if (!(ms > 60)) return; INPUT_LOCK = Date.now() + ms;
+  $$('.pad').forEach(p => p.classList.add('locked'));
+  clearTimeout(lockT); lockT = setTimeout(() => $$('.pad').forEach(p => p.classList.remove('locked')), ms);
+}
+const inputLocked = () => Date.now() < INPUT_LOCK;
 function animateThrow(pt, pid, prevDarts, boardId, label, smallCont, list) {
   const zin = zoomShow(boardId, prevDarts, pid, label);
   const ms = flyDart(smallCont, pt, pid, !zin, list);
-  if (zin) { const m2 = flyDart(zin, pt, pid, true); zoomHide(m2 + 750); return m2; }
+  if (zin) { const m2 = flyDart(zin, pt, pid, true); zoomHide(m2 + 450); lockInput(m2 + 450); return m2; }
+  lockInput(ms + 60);
   return ms;
 }
 function throwDart(n, mu, pt, human, silent) {

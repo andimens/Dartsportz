@@ -151,7 +151,7 @@ V.pgame = (p) => {
       <div class="brow"><button id="gu">↶</button><button class="miss" id="gm">FALSCH</button><button id="gst">📈</button></div></div></div>`,
     mount() {
       sizeBoard(); prender(); pRedraw();
-      const press = (n, mu) => { if (P.finished) return; vibrate(8); pThrow(n, mu); };
+      const press = (n, mu) => { if (P.finished || inputLocked()) return; vibrate(8); pThrow(n, mu); };
       $('#keys').onclick = e => { const b = e.target.closest('[data-n]'); if (b) press(+b.dataset.n, PG.mult); };
       $$('[data-b]').forEach(b => b.onclick = () => press(25, b.dataset.b === '50' ? 2 : 1));
       $$('[data-mu]').forEach(b => b.onclick = () => { PG.mult = +b.dataset.mu; renderMult(PG.mult); });
