@@ -14,7 +14,7 @@ async function rest(path, opts = {}) {
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  if (!SB || !SECRET || !PUB || !PRIV) return res.status(500).json({ error: 'Server nicht konfiguriert (Environment Variables fehlen)' });
+  if (!SECRET || !PRIV) return res.status(500).json({ error: 'Server nicht konfiguriert', fehlt: [!SECRET && 'SUPABASE_SECRET_KEY/SUPABASE_SERVICE_ROLE_KEY', !PRIV && 'VAPID_PRIVATE_KEY'].filter(Boolean) });
   try {
     const token = (req.headers.authorization || '').replace(/^Bearer /, '');
     const ur = await fetch(`${SB}/auth/v1/user`, { headers: { apikey: SECRET, Authorization: `Bearer ${token}` } });
