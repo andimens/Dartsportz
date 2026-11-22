@@ -1,5 +1,6 @@
-const C='dartsportz-v5';const A=['./','index.html','manifest.json','icon-192.png','icon-512.png'];
-self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(A)));self.skipWaiting()});
+const C='dartsportz-v6';const A=['./','index.html','manifest.json','icon-192.png','icon-512.png'];
+const X=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js','https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;800&display=swap'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(A).then(()=>Promise.all(X.map(u=>fetch(u,{mode:'no-cors'}).then(r=>c.put(u,r)).catch(()=>{}))))));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))));self.clients.claim()});
 self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||e.request.url.includes('/api/')||e.request.url.includes('supabase.co'))return;e.respondWith(fetch(e.request).then(r=>{const cp=r.clone();if((r.ok||r.type==='opaque')&&(e.request.url.startsWith(self.location.origin)||e.request.url.includes('fonts.g')||e.request.url.includes('cdn.jsdelivr')))caches.open(C).then(c=>c.put(e.request,cp));return r}).catch(()=>caches.match(e.request).then(r=>r||caches.match('index.html'))))});
 self.addEventListener('push',e=>{let d={};try{d=e.data.json()}catch(x){d={title:'Dartsportz',body:e.data?e.data.text():''}}e.waitUntil(self.registration.showNotification(d.title||'Dartsportz',{body:d.body||'',icon:'icon-192.png',badge:'icon-192.png',tag:d.tag||'dartsportz',renotify:true,data:{url:d.url||'/'}}))});
