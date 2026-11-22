@@ -221,7 +221,7 @@ V.account = () => {
       <div class="seg"><button data-m="login" class="${mode === 'login' ? 'on' : ''}">Login</button><button data-m="reg" class="${mode === 'reg' ? 'on' : ''}">Registrieren</button></div>
       <div class="card">${mode === 'reg' ? `<div class="field"><label>Name</label><input id="an" type="text" value="${esc(me() ? me().name : '')}"></div>` : ''}
       <div class="field"><label>E-Mail</label><input id="ae" type="email" autocomplete="email"></div><div class="field"><label>Passwort</label><input id="ap" type="password" autocomplete="${mode === 'reg' ? 'new-password' : 'current-password'}"></div>
-      ${mode === 'reg' ? `<div class="field"><label>Einladungscode</label><input id="ai" type="text" value="${esc(inv)}" placeholder="vom Admin erhalten" style="text-transform:uppercase"></div>` : ''}
+      ${mode === 'reg' ? `<div class="field"><label>Einladungscode (optional)</label><input id="ai" type="text" value="${esc(inv)}" placeholder="optional – macht euch direkt zu Freunden" style="text-transform:uppercase"></div>` : ''}
       <button class="btn" id="ago">${mode === 'reg' ? 'Account erstellen' : 'Einloggen'}</button>${mode === 'login' ? '<button class="btn ghost" id="afg" style="margin-top:8px">Passwort vergessen</button>' : ''}</div>`,
       mount(r) {
         on(r, '[data-m]', 'click', b => go('account', { mode: b.dataset.m }));
@@ -231,7 +231,8 @@ V.account = () => {
           if (mode === 'login') { const { error } = await sb.auth.signInWithPassword({ email, password: pw }); if (error) { btn.textContent = 'Einloggen'; return toast(error.message.includes('Invalid') ? 'E-Mail oder Passwort falsch' : error.message, 3000); } go('friends'); return; }
           const code = $('#ai', r).value.trim().toUpperCase();
           const { data: need } = await sb.rpc('needs_invite');
-          if (need) { if (!code) { btn.textContent = 'Account erstellen'; return toast('Einladungscode nötig'); } const { data: ok } = await sb.rpc('check_invite', { p_code: code }); if (!ok) { btn.textContent = 'Account erstellen'; return toast('Einladungscode ungültig oder abgelaufen', 3000); } try { localStorage.setItem('dsz_invite', code); } catch (e) {} }
+          if (need && !code) { btn.textContent = 'Account erstellen'; return toast('Einladungscode nötig'); }
+          if (code) { const { data: ok } = await sb.rpc('check_invite', { p_code: code }); if (!ok) { btn.textContent = 'Account erstellen'; return toast('Einladungscode ungültig oder abgelaufen', 3000); } try { localStorage.setItem('dsz_invite', code); } catch (e) {} }
           const { data, error } = await sb.auth.signUp({ email, password: pw, options: { data: { name: $('#an', r).value.trim() || 'Spieler' }, emailRedirectTo: location.origin } });
           if (error) { btn.textContent = 'Account erstellen'; return toast(error.message, 3500); }
           if (!data.session) modal(`<h2 class="bb">Fast geschafft!</h2><p>Bestätige deine E-Mail über den Link, den wir dir geschickt haben. Danach hier einloggen.</p><button class="btn" onclick="this.closest('.modal-bg').remove()">OK</button>`);
@@ -246,7 +247,8 @@ V.account = () => {
     title: 'ACCOUNT', tab: 'friends', left: backBtn('friends'), right: spacer,
     html: `<div class="card row">${avatar(me())}<div class="sp"><b>${esc(me().name)}</b><div class="mut sm">${esc(AUTH.user.email)}</div></div>${isA ? '<span class="badge or">ADMIN</span>' : ''}</div>
       <div class="card"><b>Gast-Code einlösen</b><div class="mut sm">Hast du vorher als Gast gespielt? Code eingeben, um deine Spiele zu übernehmen.</div><div class="row" style="margin-top:8px"><input id="gc" type="text" placeholder="z. B. AB12CD" style="text-transform:uppercase"><button class="btn sm" id="gcok">OK</button></div></div>
-      ${isA ? `<div class="lbl">Admin · Einladungen</div><div class="card"><div class="row"><span class="sp sm">Gültig für</span><select id="iu" style="width:auto"><option value="1">1 Person</option><option value="5">5 Personen</option><option value="25" selected>25 Personen</option></select></div><button class="btn" id="inew" style="margin-top:10px">＋ Einladungslink erstellen</button><div id="ilist" class="list" style="margin-top:8px"></div></div>
+      ${isA ? `<div class="lbl">Admin · Registrierung</div><div class="card"><div class="row"><div class="sp"><b>Nur mit Einladungscode</b><div class="mut xs">Aus: jeder mit dem App-Link kann sich registrieren.</div></div><button class="switch" id="ireq"></button></div></div>
+      <div class="lbl">Admin · Einladungen</div><div class="card"><div class="row"><span class="sp sm">Gültig für</span><select id="iu" style="width:auto"><option value="1">1 Person</option><option value="5">5 Personen</option><option value="25" selected>25 Personen</option></select></div><button class="btn" id="inew" style="margin-top:10px">＋ Einladungslink erstellen</button><div id="ilist" class="list" style="margin-top:8px"></div></div>
       <div class="lbl">Admin · Nutzer</div><div class="card list" id="ulist"><div class="mut sm">Lade…</div></div>` : ''}
       <button class="btn ghost" id="alo" style="color:#f87171">Ausloggen</button>`,
     mount(r) {
@@ -257,6 +259,8 @@ V.account = () => {
       const loadInv = async () => { const { data } = await sb.from('invites').select('*').order('created_at', { ascending: false }).limit(10); $('#ilist', r).innerHTML = (data || []).map(i => `<div class="it"><div class="sp"><b class="bb" style="font-size:22px;letter-spacing:2px">${i.code}</b><div class="mut xs">${i.uses}/${i.max_uses} genutzt · bis ${new Date(i.expires_at).toLocaleDateString('de-DE')}</div></div><button class="btn sm sec" data-cp="${i.code}">Link kopieren</button><button class="btn sm sec" data-del="${i.code}">✕</button></div>`).join('') || '<div class="mut sm">Noch keine Einladungen</div>'; };
       const loadUsers = async () => { const { data } = await sb.from('profiles').select('id,name,role,banned,country,created_at').order('created_at'); $('#ulist', r).innerHTML = (data || []).map(u => `<div class="it"><div class="sp"><b>${esc(u.name)}</b> ${flag(u.country)}<div class="mut xs">${u.role === 'admin' ? 'Admin' : 'Nutzer'} · seit ${new Date(u.created_at).toLocaleDateString('de-DE')}</div></div>${u.id !== AUTH.user.id ? `<button class="btn sm ${u.banned ? '' : 'sec'}" data-ban="${u.id}" data-b="${u.banned ? 1 : 0}">${u.banned ? 'Entsperren' : 'Sperren'}</button>` : ''}</div>`).join(''); };
       loadInv(); loadUsers();
+      sb.from('app_settings').select('value').eq('key', 'inviteRequired').maybeSingle().then(({ data }) => { $('#ireq', r).classList.toggle('on', !!(data && data.value === true)); });
+      $('#ireq', r).onclick = async () => { const nv = !$('#ireq', r).classList.contains('on'); const { error } = await sb.from('app_settings').upsert({ key: 'inviteRequired', value: nv, updated_at: new Date().toISOString() }); if (error) return toast(error.message, 3000); $('#ireq', r).classList.toggle('on', nv); toast(nv ? 'Registrierung nur mit Einladung' : 'Registrierung für alle offen'); };
       $('#inew', r).onclick = async () => { const { data, error } = await sb.from('invites').insert({ created_by: AUTH.user.id, max_uses: +$('#iu', r).value }).select().single(); if (error) return toast(error.message, 3000); await copyText(link(data.code)); loadInv(); };
       on(r, '[data-cp]', 'click', b => copyText(link(b.dataset.cp)));
       on(r, '[data-del]', 'click', async b => { await sb.from('invites').delete().eq('code', b.dataset.del); loadInv(); });
