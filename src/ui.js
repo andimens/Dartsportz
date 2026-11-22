@@ -46,7 +46,7 @@ V.welcome = () => ({
     $('#wgo', r).onclick = () => {
       const n = $('#wn', r).value.trim(); if (!n) return toast('Bitte Namen eingeben');
       const p = newPlayer({ name: n, country: $('#wc', r).value, board: $('#wb', r).value, guest: false, color: '#ff6b00', admin: true });
-      S.me = p.id; S.setup = null; save(true); ac(); go('home');
+      S.me = p.id; S.setup = null; save(true); ac(); go('home'); setTimeout(() => pickCallName(p), 300);
     };
   }
 });

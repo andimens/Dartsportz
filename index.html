@@ -441,16 +441,37 @@ function proPlay(lang, keys, opts = {}) {
   const ps = keys.map(k => proBuf(lang, k)); ps.forEach(p => p.catch(() => {}));
   PRO.q = PRO.q.then(async () => { for (const p of ps) { if (tok !== PRO.tok) return; try { await piperPlay(await p, 1); } catch (e) {} } });
 }
+const CALL_NAMES = ["Harm", "Daniel", "Andreas", "Andi", "Vero", "Benny", "Tan", "Peter", "Anna", "Mary", "Levi", "Sephora", "Rahel", "Zeki", "Alex", "Ben", "Chris", "David", "Dennis", "Dominik", "Eric", "Felix", "Florian", "Jan", "Jonas", "Julian", "Kevin", "Lukas", "Marcel", "Marco", "Mario", "Markus", "Martin", "Max", "Michael", "Nico", "Niklas", "Patrick", "Paul", "Phil", "Robin", "Sascha", "Sebastian", "Simon", "Stefan", "Sven", "Thomas", "Tim", "Tobias", "Tom", "Kai", "Mike", "Leon", "Elias", "Noah", "Finn", "Luca", "Emre", "Can", "Mehmet", "Ali", "Murat", "Julia", "Lisa", "Laura", "Lena", "Sarah", "Lea", "Marie", "Sophie", "Hannah", "Nina", "Jana", "Katharina", "Melanie", "Sandra", "Jessica", "Michelle", "Vanessa", "Svenja", "Tina", "Kim", "Mia", "Emma", "Lara", "Selin", "Ayse"];
+const callSlug = s => String(s || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
+function callKeyOf(x) {
+  if (!x) return null;
+  if (typeof x === 'object') { const c = x.callName || (x.dart && x.dart.callName); if (c) return 'n_' + c; return 'n_' + callSlug((x.nick || x.name || '').split(' ')[0]); }
+  return 'n_' + callSlug(String(x).split(/[ ·]/)[0]);
+}
+// Caller-Namen auswählen (mit Hörprobe)
+function pickCallName(p, done) {
+  const cur = p.callName || (p.dart && p.dart.callName) || callSlug(p.name);
+  modal(`<h2 class="bb">Wie soll der Caller dich nennen?</h2><p class="mut sm" style="text-align:center">Tippe einen Namen zum Anhören, dann „Übernehmen“.</p><input id="cnf" type="text" placeholder="Suchen …" style="margin-bottom:10px"><div id="cnl" style="display:flex;flex-wrap:wrap;gap:8px;max-height:46vh;overflow:auto"></div><div style="height:12px"></div><button class="btn" id="cnok">Übernehmen</button><button class="btn ghost" id="cnno" style="margin-top:8px">Ohne Namen</button>`, (m, close) => {
+    let sel = cur;
+    const draw = () => { const q = callSlug($('#cnf', m).value); $('#cnl', m).innerHTML = CALL_NAMES.filter(n => !q || callSlug(n).includes(q)).map(n => `<button class="badge ${callSlug(n) === sel ? 'or' : ''}" style="font-size:15px;padding:9px 14px" data-cn="${callSlug(n)}">${esc(n)}</button>`).join(''); };
+    draw(); $('#cnf', m).oninput = draw;
+    on(m, '[data-cn]', 'click', b => { sel = b.dataset.cn; draw(); const l = S.settings.caller === 'en' ? 'en' : 'de'; proManifest(l).then(man => { if (man && man.keys.includes('n_' + sel)) proPlay(l, ['n_' + sel], { flush: true }); else say(b.textContent, null, { flush: true }); }); });
+    const set = v => { p.callName = v; p.dart = Object.assign({}, p.dart || {}, { callName: v }); save(true); if (p.id === S.me && typeof pushProfile === 'function') pushProfile(); close(); done && done(); };
+    $('#cnok', m).onclick = () => set(sel);
+    $('#cnno', m).onclick = () => set('');
+  });
+}
 // Ansage nach Art: score / bust / game / match / require / first
 function callout(kind, n, name, opts = {}) {
   const lang = S.settings.caller; if (!lang || lang === 'off') return;
   const man = PRO.man[lang];
   if (S.settings.voiceEngine === 'pro' && man) {
-    const nk = name ? 'n_' + String(name).split(/[ ·]/)[0].toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '') : null;
+    const nk = callKeyOf(name);
     const hasN = nk && man.keys.includes(nk);
     const keys = kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? (hasN ? ['gameshot', nk] : ['gameshot']) : kind === 'match' ? (hasN ? ['gameshot_match', nk] : ['gameshot_match']) : kind === 'first' ? (hasN ? [nk, 'begins', 'gameon'] : ['gameon']) : kind === 'require' ? (hasN ? [nk, 'require', 'r_' + n] : ['require', 'r_' + n]) : [];
     if (keys.every(k => man.keys.includes(k))) return proPlay(lang, keys, opts);
   }
+  if (name && typeof name === 'object') name = pName(name);
   const t = kind === 'score' ? CALL.score(n) : kind === 'bust' ? CALL.bust() : kind === 'game' ? CALL.game(name || '') : kind === 'match' ? CALL.match(name || '') : kind === 'first' ? CALL.first(name || '') : kind === 'require' ? CALL.require(name || '', n) : '';
   if (t) say(t, null, opts);
 }
@@ -829,7 +850,7 @@ V.welcome = () => ({
     $('#wgo', r).onclick = () => {
       const n = $('#wn', r).value.trim(); if (!n) return toast('Bitte Namen eingeben');
       const p = newPlayer({ name: n, country: $('#wc', r).value, board: $('#wb', r).value, guest: false, color: '#ff6b00', admin: true });
-      S.me = p.id; S.setup = null; save(true); ac(); go('home');
+      S.me = p.id; S.setup = null; save(true); ac(); go('home'); setTimeout(() => pickCallName(p), 300);
     };
   }
 });
@@ -1069,7 +1090,7 @@ V.game = (p) => {
       $('#gx').onclick = () => modal(`<h2 class="bb">Spiel verlassen</h2><button class="btn" id="xp" style="margin-bottom:10px">⏸ Pausieren – später weiterspielen</button><button class="btn sec" id="xd" style="color:#f87171">🗑 Beenden ohne Wertung</button>`, (md, close) => { $('#xp', md).onclick = () => { close(); stopTimers(); save(true); go('home'); }; $('#xd', md).onclick = () => { close(); stopTimers(); discardGame('x01').then(() => {}); }; });
       $('#gst').onclick = liveStats;
       $('#gset').onclick = quickSettings;
-      if (p.fresh) { const sd = m.sides[m.cur.side]; setTimeout(() => callout('first', 0, sd.name, { flush: true }), 250); if (p.why) toast('🎯 ' + boardById(m.boardId).name + ' · ' + p.why, 2400); p.fresh = false; introBubble(); }
+      if (p.fresh) { const sd = m.sides[m.cur.side]; setTimeout(() => callout('first', 0, sd.members.length === 1 ? playerById(sd.members[0]) : sd.name, { flush: true }), 250); if (p.why) toast('🎯 ' + boardById(m.boardId).name + ' · ' + p.why, 2400); p.fresh = false; introBubble(); }
       redrawStuck();
       maybeBot();
     }
@@ -1196,13 +1217,14 @@ function afterVisit(res, side) {
   if (res.legWon) {
     const name = pName(playerById(v.pid));
     chime(true);
-    if (res.matchWon) { callout('match', 0, sd.name); return finishMatch(); }
-    callout('game', 0, name);
+    const wp = playerById(v.pid);
+    if (res.matchWon) { callout('match', 0, sd.members.length === 1 ? wp : sd.name); return finishMatch(); }
+    callout('game', 0, wp);
     if (bot) botSays(bot.bot.level, sd.bot ? 'meLeg' : 'youLeg');
     legBanner(sd.name, v.before);
   } else {
     const nx = m.cur.side, rem = m.cur.rem[nx];
-    if (rem <= 170 && checkout(rem, 3, m.settings.outMode) && m.sides.length > 0) G.timers.push(setTimeout(() => callout('require', rem, pName(playerById(curPid(m)))), 50));
+    if (rem <= 170 && checkout(rem, 3, m.settings.outMode) && m.sides.length > 0) G.timers.push(setTimeout(() => callout('require', rem, playerById(curPid(m))), 50));
   }
   maybeBot();
 }
@@ -1573,6 +1595,7 @@ async function onLogin() {
     if (prof.avatar_url) mp.avatar = prof.avatar_url;
   } else pushProfile(true);
   mp._synced = true; save(true);
+  if (mp.callName === undefined && !(mp.dart && mp.dart.callName !== undefined)) setTimeout(() => pickCallName(mp), 800); else if (mp.callName === undefined && mp.dart) mp.callName = mp.dart.callName;
   // globale Scheiben-Sounds vom Admin
   const { data: st } = await sb.from('app_settings').select('*').eq('key', 'boardSounds').maybeSingle();
   if (st && st.value && !mp.admin) { S.settings.boardSounds = st.value; save(); }
@@ -2159,6 +2182,7 @@ function editPlayer(pid, done) {
     <div class="grid2" style="margin:0"><div class="field"><label>Name</label><input id="pn" type="text" value="${esc(p.name)}"></div><div class="field"><label>Spitzname</label><input id="pni" type="text" value="${esc(p.nick)}"></div></div>
     <div class="field"><label>Land</label><select id="pc">${COUNTRIES.map(([c, n]) => `<option value="${c}" ${c === p.country ? 'selected' : ''}>${flag(c)} ${n}</option>`).join('')}</select></div>
     <div class="grid2" style="margin:0"><div class="field"><label>Alter</label><input id="pa" type="number" inputmode="numeric" value="${esc(p.age)}"></div><div class="field"><label>Größe (cm)</label><input id="ph" type="number" inputmode="numeric" value="${esc(p.height)}"></div></div>
+    <div class="field"><label>Caller-Name</label><button class="btn sec sm" id="pcn" style="width:100%">🎤 ${esc((CALL_NAMES.find(n => callSlug(n) === (p.callName || (p.dart && p.dart.callName))) || (p.callName === '' ? 'ohne Namen' : 'auswählen')))}</button></div>
     <div class="field"><label>Wurfhand</label><div class="seg" style="margin:0"><button data-hand="rechts" class="${p.hand === 'rechts' ? 'on' : ''}">Rechts</button><button data-hand="links" class="${p.hand === 'links' ? 'on' : ''}">Links</button></div></div>
     <div class="field"><label>Lieblingsscheibe</label><div class="grid2" style="grid-template-columns:repeat(5,1fr);gap:6px">${BOARDS.map(b => `<button data-bd="${b.id}" style="border-radius:50%;padding:2px;border:3px solid ${b.id === p.board ? 'var(--or)' : 'transparent'}" title="${esc(b.name)}">${boardSVG(b, { numbers: false })}</button>`).join('')}</div><div class="sm" id="pbn" style="text-align:center;margin-top:4px">${esc(boardById(p.board).name)}</div></div>
     ${p.guest ? `<div class="card" style="background:var(--card2)"><b>Account-Übernahme</b><div class="mut sm">Wenn ${esc(p.name)} sich später registriert, überträgt dieser Code alle Spiele & Statistiken auf seinen Account:</div><div class="bb" style="font-size:34px;color:var(--or);letter-spacing:3px;text-align:center">${p.linkCode}</div><button class="btn sm sec" id="gcl" style="width:100%">☁️ Code mit Spielen hochladen</button></div>` : ''}
@@ -2169,6 +2193,7 @@ function editPlayer(pid, done) {
     on(m, '[data-hand]', 'click', b => { p.hand = b.dataset.hand; $$('[data-hand]', m).forEach(x => x.classList.toggle('on', x === b)); });
     on(m, '[data-bd]', 'click', b => { p.board = b.dataset.bd; $$('[data-bd]', m).forEach(x => x.style.borderColor = x === b ? 'var(--or)' : 'transparent'); $('#pbn', m).textContent = boardById(p.board).name; });
     $('#ps', m).onclick = () => { sv(); close(); done && done(); };
+    $('#pcn', m).onclick = () => { sv(); close(); pickCallName(p, () => editPlayer(pid, done)); };
     $('#pd', m).onclick = () => { sv(); close(); go('darts', { pid, from: route.name }); };
     $('#pav', m).onclick = async () => { const f = await pickFile(); if (!f) return; sv(); p.avatar = await resizeImage(f, 200, .8); save(); close(); editPlayer(pid, done); };
     $('#pavx', m) && ($('#pavx', m).onclick = () => { sv(); p.avatar = null; save(); close(); editPlayer(pid, done); });

@@ -250,16 +250,37 @@ function proPlay(lang, keys, opts = {}) {
   const ps = keys.map(k => proBuf(lang, k)); ps.forEach(p => p.catch(() => {}));
   PRO.q = PRO.q.then(async () => { for (const p of ps) { if (tok !== PRO.tok) return; try { await piperPlay(await p, 1); } catch (e) {} } });
 }
+const CALL_NAMES = ["Harm", "Daniel", "Andreas", "Andi", "Vero", "Benny", "Tan", "Peter", "Anna", "Mary", "Levi", "Sephora", "Rahel", "Zeki", "Alex", "Ben", "Chris", "David", "Dennis", "Dominik", "Eric", "Felix", "Florian", "Jan", "Jonas", "Julian", "Kevin", "Lukas", "Marcel", "Marco", "Mario", "Markus", "Martin", "Max", "Michael", "Nico", "Niklas", "Patrick", "Paul", "Phil", "Robin", "Sascha", "Sebastian", "Simon", "Stefan", "Sven", "Thomas", "Tim", "Tobias", "Tom", "Kai", "Mike", "Leon", "Elias", "Noah", "Finn", "Luca", "Emre", "Can", "Mehmet", "Ali", "Murat", "Julia", "Lisa", "Laura", "Lena", "Sarah", "Lea", "Marie", "Sophie", "Hannah", "Nina", "Jana", "Katharina", "Melanie", "Sandra", "Jessica", "Michelle", "Vanessa", "Svenja", "Tina", "Kim", "Mia", "Emma", "Lara", "Selin", "Ayse"];
+const callSlug = s => String(s || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
+function callKeyOf(x) {
+  if (!x) return null;
+  if (typeof x === 'object') { const c = x.callName || (x.dart && x.dart.callName); if (c) return 'n_' + c; return 'n_' + callSlug((x.nick || x.name || '').split(' ')[0]); }
+  return 'n_' + callSlug(String(x).split(/[ ·]/)[0]);
+}
+// Caller-Namen auswählen (mit Hörprobe)
+function pickCallName(p, done) {
+  const cur = p.callName || (p.dart && p.dart.callName) || callSlug(p.name);
+  modal(`<h2 class="bb">Wie soll der Caller dich nennen?</h2><p class="mut sm" style="text-align:center">Tippe einen Namen zum Anhören, dann „Übernehmen“.</p><input id="cnf" type="text" placeholder="Suchen …" style="margin-bottom:10px"><div id="cnl" style="display:flex;flex-wrap:wrap;gap:8px;max-height:46vh;overflow:auto"></div><div style="height:12px"></div><button class="btn" id="cnok">Übernehmen</button><button class="btn ghost" id="cnno" style="margin-top:8px">Ohne Namen</button>`, (m, close) => {
+    let sel = cur;
+    const draw = () => { const q = callSlug($('#cnf', m).value); $('#cnl', m).innerHTML = CALL_NAMES.filter(n => !q || callSlug(n).includes(q)).map(n => `<button class="badge ${callSlug(n) === sel ? 'or' : ''}" style="font-size:15px;padding:9px 14px" data-cn="${callSlug(n)}">${esc(n)}</button>`).join(''); };
+    draw(); $('#cnf', m).oninput = draw;
+    on(m, '[data-cn]', 'click', b => { sel = b.dataset.cn; draw(); const l = S.settings.caller === 'en' ? 'en' : 'de'; proManifest(l).then(man => { if (man && man.keys.includes('n_' + sel)) proPlay(l, ['n_' + sel], { flush: true }); else say(b.textContent, null, { flush: true }); }); });
+    const set = v => { p.callName = v; p.dart = Object.assign({}, p.dart || {}, { callName: v }); save(true); if (p.id === S.me && typeof pushProfile === 'function') pushProfile(); close(); done && done(); };
+    $('#cnok', m).onclick = () => set(sel);
+    $('#cnno', m).onclick = () => set('');
+  });
+}
 // Ansage nach Art: score / bust / game / match / require / first
 function callout(kind, n, name, opts = {}) {
   const lang = S.settings.caller; if (!lang || lang === 'off') return;
   const man = PRO.man[lang];
   if (S.settings.voiceEngine === 'pro' && man) {
-    const nk = name ? 'n_' + String(name).split(/[ ·]/)[0].toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '') : null;
+    const nk = callKeyOf(name);
     const hasN = nk && man.keys.includes(nk);
     const keys = kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? (hasN ? ['gameshot', nk] : ['gameshot']) : kind === 'match' ? (hasN ? ['gameshot_match', nk] : ['gameshot_match']) : kind === 'first' ? (hasN ? [nk, 'begins', 'gameon'] : ['gameon']) : kind === 'require' ? (hasN ? [nk, 'require', 'r_' + n] : ['require', 'r_' + n]) : [];
     if (keys.every(k => man.keys.includes(k))) return proPlay(lang, keys, opts);
   }
+  if (name && typeof name === 'object') name = pName(name);
   const t = kind === 'score' ? CALL.score(n) : kind === 'bust' ? CALL.bust() : kind === 'game' ? CALL.game(name || '') : kind === 'match' ? CALL.match(name || '') : kind === 'first' ? CALL.first(name || '') : kind === 'require' ? CALL.require(name || '', n) : '';
   if (t) say(t, null, opts);
 }

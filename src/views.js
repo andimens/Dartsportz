@@ -245,6 +245,7 @@ function editPlayer(pid, done) {
     <div class="grid2" style="margin:0"><div class="field"><label>Name</label><input id="pn" type="text" value="${esc(p.name)}"></div><div class="field"><label>Spitzname</label><input id="pni" type="text" value="${esc(p.nick)}"></div></div>
     <div class="field"><label>Land</label><select id="pc">${COUNTRIES.map(([c, n]) => `<option value="${c}" ${c === p.country ? 'selected' : ''}>${flag(c)} ${n}</option>`).join('')}</select></div>
     <div class="grid2" style="margin:0"><div class="field"><label>Alter</label><input id="pa" type="number" inputmode="numeric" value="${esc(p.age)}"></div><div class="field"><label>Größe (cm)</label><input id="ph" type="number" inputmode="numeric" value="${esc(p.height)}"></div></div>
+    <div class="field"><label>Caller-Name</label><button class="btn sec sm" id="pcn" style="width:100%">🎤 ${esc((CALL_NAMES.find(n => callSlug(n) === (p.callName || (p.dart && p.dart.callName))) || (p.callName === '' ? 'ohne Namen' : 'auswählen')))}</button></div>
     <div class="field"><label>Wurfhand</label><div class="seg" style="margin:0"><button data-hand="rechts" class="${p.hand === 'rechts' ? 'on' : ''}">Rechts</button><button data-hand="links" class="${p.hand === 'links' ? 'on' : ''}">Links</button></div></div>
     <div class="field"><label>Lieblingsscheibe</label><div class="grid2" style="grid-template-columns:repeat(5,1fr);gap:6px">${BOARDS.map(b => `<button data-bd="${b.id}" style="border-radius:50%;padding:2px;border:3px solid ${b.id === p.board ? 'var(--or)' : 'transparent'}" title="${esc(b.name)}">${boardSVG(b, { numbers: false })}</button>`).join('')}</div><div class="sm" id="pbn" style="text-align:center;margin-top:4px">${esc(boardById(p.board).name)}</div></div>
     ${p.guest ? `<div class="card" style="background:var(--card2)"><b>Account-Übernahme</b><div class="mut sm">Wenn ${esc(p.name)} sich später registriert, überträgt dieser Code alle Spiele & Statistiken auf seinen Account:</div><div class="bb" style="font-size:34px;color:var(--or);letter-spacing:3px;text-align:center">${p.linkCode}</div><button class="btn sm sec" id="gcl" style="width:100%">☁️ Code mit Spielen hochladen</button></div>` : ''}
@@ -255,6 +256,7 @@ function editPlayer(pid, done) {
     on(m, '[data-hand]', 'click', b => { p.hand = b.dataset.hand; $$('[data-hand]', m).forEach(x => x.classList.toggle('on', x === b)); });
     on(m, '[data-bd]', 'click', b => { p.board = b.dataset.bd; $$('[data-bd]', m).forEach(x => x.style.borderColor = x === b ? 'var(--or)' : 'transparent'); $('#pbn', m).textContent = boardById(p.board).name; });
     $('#ps', m).onclick = () => { sv(); close(); done && done(); };
+    $('#pcn', m).onclick = () => { sv(); close(); pickCallName(p, () => editPlayer(pid, done)); };
     $('#pd', m).onclick = () => { sv(); close(); go('darts', { pid, from: route.name }); };
     $('#pav', m).onclick = async () => { const f = await pickFile(); if (!f) return; sv(); p.avatar = await resizeImage(f, 200, .8); save(); close(); editPlayer(pid, done); };
     $('#pavx', m) && ($('#pavx', m).onclick = () => { sv(); p.avatar = null; save(); close(); editPlayer(pid, done); });

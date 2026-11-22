@@ -39,6 +39,7 @@ async function onLogin() {
     if (prof.avatar_url) mp.avatar = prof.avatar_url;
   } else pushProfile(true);
   mp._synced = true; save(true);
+  if (mp.callName === undefined && !(mp.dart && mp.dart.callName !== undefined)) setTimeout(() => pickCallName(mp), 800); else if (mp.callName === undefined && mp.dart) mp.callName = mp.dart.callName;
   // globale Scheiben-Sounds vom Admin
   const { data: st } = await sb.from('app_settings').select('*').eq('key', 'boardSounds').maybeSingle();
   if (st && st.value && !mp.admin) { S.settings.boardSounds = st.value; save(); }

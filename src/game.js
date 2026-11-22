@@ -35,7 +35,7 @@ V.game = (p) => {
       $('#gx').onclick = () => modal(`<h2 class="bb">Spiel verlassen</h2><button class="btn" id="xp" style="margin-bottom:10px">⏸ Pausieren – später weiterspielen</button><button class="btn sec" id="xd" style="color:#f87171">🗑 Beenden ohne Wertung</button>`, (md, close) => { $('#xp', md).onclick = () => { close(); stopTimers(); save(true); go('home'); }; $('#xd', md).onclick = () => { close(); stopTimers(); discardGame('x01').then(() => {}); }; });
       $('#gst').onclick = liveStats;
       $('#gset').onclick = quickSettings;
-      if (p.fresh) { const sd = m.sides[m.cur.side]; setTimeout(() => callout('first', 0, sd.name, { flush: true }), 250); if (p.why) toast('🎯 ' + boardById(m.boardId).name + ' · ' + p.why, 2400); p.fresh = false; introBubble(); }
+      if (p.fresh) { const sd = m.sides[m.cur.side]; setTimeout(() => callout('first', 0, sd.members.length === 1 ? playerById(sd.members[0]) : sd.name, { flush: true }), 250); if (p.why) toast('🎯 ' + boardById(m.boardId).name + ' · ' + p.why, 2400); p.fresh = false; introBubble(); }
       redrawStuck();
       maybeBot();
     }
@@ -162,13 +162,14 @@ function afterVisit(res, side) {
   if (res.legWon) {
     const name = pName(playerById(v.pid));
     chime(true);
-    if (res.matchWon) { callout('match', 0, sd.name); return finishMatch(); }
-    callout('game', 0, name);
+    const wp = playerById(v.pid);
+    if (res.matchWon) { callout('match', 0, sd.members.length === 1 ? wp : sd.name); return finishMatch(); }
+    callout('game', 0, wp);
     if (bot) botSays(bot.bot.level, sd.bot ? 'meLeg' : 'youLeg');
     legBanner(sd.name, v.before);
   } else {
     const nx = m.cur.side, rem = m.cur.rem[nx];
-    if (rem <= 170 && checkout(rem, 3, m.settings.outMode) && m.sides.length > 0) G.timers.push(setTimeout(() => callout('require', rem, pName(playerById(curPid(m)))), 50));
+    if (rem <= 170 && checkout(rem, 3, m.settings.outMode) && m.sides.length > 0) G.timers.push(setTimeout(() => callout('require', rem, playerById(curPid(m))), 50));
   }
   maybeBot();
 }
