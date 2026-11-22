@@ -193,7 +193,7 @@ input[type=color]{width:44px;height:36px;border:0;border-radius:10px;background:
 /* ================= STORE ================= */
 const LS_KEY = 'dartsportz_v1';
 let mem = null;
-const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', voiceEngine: 'ai', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
+const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', voiceEngine: 'pro', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
 function loadStore() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) {}
@@ -424,9 +424,37 @@ function piperSay(text, lang, opts) {
 }
 // häufige Ansagen vorab berechnen, damit sie sofort kommen
 async function piperWarmup(lang) { try { for (const n of [180, 140, 100, 60, 45, 26, 0]) await piperBuffer(CALL.score(n), lang); } catch (e) {} }
+/* ---------- Profi-Ansager: vorab aufgenommene Clips (ElevenLabs) ---------- */
+const PRO = { man: {}, bufs: new Map(), q: Promise.resolve(), tok: 0 };
+async function proManifest(lang) {
+  if (PRO.man[lang] !== undefined) return PRO.man[lang];
+  try { const r = await fetch(`audio/${lang}/manifest.json`, { cache: 'no-cache' }); PRO.man[lang] = r.ok ? await r.json() : null; } catch (e) { PRO.man[lang] = null; }
+  return PRO.man[lang];
+}
+async function proBuf(lang, key) {
+  const k = lang + '/' + key; if (PRO.bufs.has(k)) return PRO.bufs.get(k);
+  const r = await fetch(`audio/${lang}/${key}.mp3`); if (!r.ok) throw new Error('fehlt'); const b = await ac().decodeAudioData(await r.arrayBuffer());
+  PRO.bufs.set(k, b); return b;
+}
+function proPlay(lang, keys, opts = {}) {
+  if (opts.flush) PRO.tok++; const tok = PRO.tok;
+  const ps = keys.map(k => proBuf(lang, k)); ps.forEach(p => p.catch(() => {}));
+  PRO.q = PRO.q.then(async () => { for (const p of ps) { if (tok !== PRO.tok) return; try { await piperPlay(await p, 1); } catch (e) {} } });
+}
+// Ansage nach Art: score / bust / game / match / require / first
+function callout(kind, n, name, opts = {}) {
+  const lang = S.settings.caller; if (!lang || lang === 'off') return;
+  const man = PRO.man[lang];
+  if (S.settings.voiceEngine === 'pro' && man) {
+    const keys = kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? ['gameshot'] : kind === 'match' ? ['gameshot_match'] : kind === 'first' ? ['gameon'] : kind === 'require' ? ['require', 'r_' + n] : [];
+    if (keys.every(k => man.keys.includes(k))) return proPlay(lang, keys, opts);
+  }
+  const t = kind === 'score' ? CALL.score(n) : kind === 'bust' ? CALL.bust() : kind === 'game' ? CALL.game(name || '') : kind === 'match' ? CALL.match(name || '') : kind === 'first' ? CALL.first(name || '') : kind === 'require' ? CALL.require(name || '', n) : '';
+  if (t) say(t, null, opts);
+}
 function say(text, lang, opts = {}) {
   lang = lang || S.settings.caller; if (!lang || lang === 'off') return;
-  if (S.settings.voiceEngine === 'ai' && PIPER.ready[lang]) return piperSay(text, lang, opts);
+  if ((S.settings.voiceEngine === 'ai' || S.settings.voiceEngine === 'pro') && PIPER.ready[lang]) return piperSay(text, lang, opts);
   webSay(text, lang, opts);
 }
 function webSay(text, lang, opts = {}) {
@@ -1039,7 +1067,7 @@ V.game = (p) => {
       $('#gx').onclick = () => modal(`<h2 class="bb">Spiel verlassen</h2><button class="btn" id="xp" style="margin-bottom:10px">⏸ Pausieren – später weiterspielen</button><button class="btn sec" id="xd" style="color:#f87171">🗑 Beenden ohne Wertung</button>`, (md, close) => { $('#xp', md).onclick = () => { close(); stopTimers(); save(true); go('home'); }; $('#xd', md).onclick = () => { close(); stopTimers(); discardGame('x01').then(() => {}); }; });
       $('#gst').onclick = liveStats;
       $('#gset').onclick = quickSettings;
-      if (p.fresh) { const sd = m.sides[m.cur.side]; setTimeout(() => say(CALL.first(sd.name), null, { flush: true }), 250); if (p.why) toast('🎯 ' + boardById(m.boardId).name + ' · ' + p.why, 2400); p.fresh = false; introBubble(); }
+      if (p.fresh) { const sd = m.sides[m.cur.side]; setTimeout(() => callout('first', 0, sd.name, { flush: true }), 250); if (p.why) toast('🎯 ' + boardById(m.boardId).name + ' · ' + p.why, 2400); p.fresh = false; introBubble(); }
       redrawStuck();
       maybeBot();
     }
@@ -1154,7 +1182,7 @@ function throwDart(n, mu, pt, human, silent) {
 function afterVisit(res, side) {
   const m = G.m, v = res.visit, sd = m.sides[side];
   G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100);
-  if (!res.legWon) say(v.bust ? CALL.bust() : CALL.score(v.scored));
+  if (!res.legWon) callout(v.bust ? 'bust' : 'score', v.scored);
   if (v.scored === 180) chime();
   const bot = m.sides.find(s => s.bot);
   if (bot && Math.random() < .55) {
@@ -1166,13 +1194,13 @@ function afterVisit(res, side) {
   if (res.legWon) {
     const name = pName(playerById(v.pid));
     chime(true);
-    if (res.matchWon) { say(CALL.match(sd.name)); return finishMatch(); }
-    say(CALL.game(name));
+    if (res.matchWon) { callout('match', 0, sd.name); return finishMatch(); }
+    callout('game', 0, name);
     if (bot) botSays(bot.bot.level, sd.bot ? 'meLeg' : 'youLeg');
     legBanner(sd.name, v.before);
   } else {
     const nx = m.cur.side, rem = m.cur.rem[nx];
-    if (rem <= 170 && checkout(rem, 3, m.settings.outMode) && m.sides.length > 0) G.timers.push(setTimeout(() => say(CALL.require(pName(playerById(curPid(m))), rem)), 50));
+    if (rem <= 170 && checkout(rem, 3, m.settings.outMode) && m.sides.length > 0) G.timers.push(setTimeout(() => callout('require', rem, pName(playerById(curPid(m)))), 50));
   }
   maybeBot();
 }
@@ -1477,7 +1505,7 @@ function pThrow(n, mu, silent) {
 function pNext() {
   const P = PG.P, g = PARTY[P.mode];
   const sc = P.darts.reduce((a, d) => a + d.n * d.m, 0);
-  if (P.mode !== 'killer' && P.mode !== 'cricket') say(CALL.score(sc));
+  if (P.mode !== 'killer' && P.mode !== 'cricket') callout('score', sc);
   P.darts = []; PG.clearT = setTimeout(() => { PG.stuck.forEach(e => e.remove()); PG.stuck = []; PG.clearT = null; }, 1000);
   if (g.over(P) != null) return pFinish();
   const n = P.players.length; let nx = P.cur, guard = 0;
@@ -1723,7 +1751,7 @@ function applyRemote(row) {
     if (nm.cur.darts.length) d = nm.cur.darts[nm.cur.darts.length - 1];
     else { const leg = [...nm.legs].reverse().find(l => l.visits.length); if (leg) { vend = leg.visits[leg.visits.length - 1]; d = vend.darts[vend.darts.length - 1]; } }
     if (d) { const ms = animateThrow(d.x != null ? [d.x, d.y] : pointFor(d.n, d.m), vend ? vend.pid : curPid(nm), nm.cur.darts.slice(0, -1), nm.boardId, dLabelFull(d.n, d.m), $('#bin'), G.stuck); setTimeout(() => impact(nm.boardId, d.n === 0), ms); }
-    if (vend) { say(vend.bust ? CALL.bust() : CALL.score(vend.scored)); G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100); }
+    if (vend) { callout(vend.bust ? 'bust' : 'score', vend.scored); G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100); }
     renderGame();
   } else { renderGame(); redrawStuck(); }
   if (nm.finished && !old.finished) { G.m = S.active; finishMatch(); }
@@ -2193,9 +2221,9 @@ function settingsBlock() {
     ${sw('sound', 'Aufprall-Sound')}<div class="field"><label>Lautstärke</label><input type="range" min="0" max="1" step=".05" value="${s.volume}" data-vol></div>
     ${sw('zoom', 'Großansicht beim Wurf (Hintergrund unscharf)')}
     <div class="lbl">Ansager</div>${seg('caller', [['off', 'Aus'], ['de', 'Deutsch'], ['en', 'Englisch']])}
-    ${s.caller !== 'off' ? `<div class="field"><label>Sprachausgabe</label><div class="seg" style="margin:0"><button data-s="voiceEngine" data-v="ai" class="${s.voiceEngine === 'ai' ? 'on' : ''}">🎙 Natürlich (KI)</button><button data-s="voiceEngine" data-v="device" class="${s.voiceEngine !== 'ai' ? 'on' : ''}">📱 Gerätestimme</button></div></div>` : ''}
+    ${s.caller !== 'off' ? `<div class="field"><label>Sprachausgabe</label><div class="seg" style="margin:0"><button data-s="voiceEngine" data-v="pro" class="${s.voiceEngine === 'pro' ? 'on' : ''}">🔥 Profi-Caller</button><button data-s="voiceEngine" data-v="ai" class="${s.voiceEngine === 'ai' ? 'on' : ''}">🎙 KI</button><button data-s="voiceEngine" data-v="device" class="${s.voiceEngine === 'device' ? 'on' : ''}">📱 Gerät</button></div><div class="xs mut" id="prost" style="margin-top:4px"></div></div>` : ''}
     ${s.caller !== 'off' && s.voiceEngine === 'ai' ? `<div class="card" style="background:var(--card2)" id="aiv"><b>KI-Stimme ${s.caller === 'en' ? 'Englisch' : 'Deutsch'}</b><div class="mut xs">Klingt wie ein echter Sprecher – auf iPhone und Android gleich. Einmaliger Download (ca. 60 MB, am besten im WLAN), danach auch offline.</div><div class="bar" style="margin:8px 0;display:none" id="aivb"><i style="width:0"></i></div><button class="btn sm" id="aivdl" style="margin-top:6px">Prüfe …</button></div>` : ''}
-    ${s.caller !== 'off' && s.voiceEngine !== 'ai' ? `<div class="field"><label>Stimme</label><select data-voice="${s.caller}">${voicesFor(s.caller).sort((a, b) => voiceScore(b) - voiceScore(a)).map(v => `<option value="${esc(v.voiceURI)}" ${bestVoice(s.caller) === v ? 'selected' : ''}>${esc(v.name)}${voiceScore(v) >= 30 ? ' ⭐' : ''}</option>`).join('') || '<option>Systemstimme</option>'}</select></div>` : ''}
+    ${s.caller !== 'off' && s.voiceEngine === 'device' ? `<div class="field"><label>Stimme</label><select data-voice="${s.caller}">${voicesFor(s.caller).sort((a, b) => voiceScore(b) - voiceScore(a)).map(v => `<option value="${esc(v.voiceURI)}" ${bestVoice(s.caller) === v ? 'selected' : ''}>${esc(v.name)}${voiceScore(v) >= 30 ? ' ⭐' : ''}</option>`).join('') || '<option>Systemstimme</option>'}</select></div>` : ''}
     <button class="btn sm sec" data-test>🔊 Test</button> <button class="btn sm sec" data-vhelp>Natürlichere Stimme?</button>
     ${sw('botVoice', 'Bots sprechen (Sprachausgabe)')}${sw('vibrate', 'Vibration')}`;
 }
@@ -2217,7 +2245,8 @@ function bindSettings(m) {
   m.addEventListener('change', e => { const l = e.target.dataset.voice; if (l) { S.settings[l === 'en' ? 'voiceEn' : 'voiceDe'] = e.target.value; save(); say(CALL.score(180), null, { flush: true }); } });
   on(m, '[data-vhelp]', 'click', () => modal(`<h2 class="bb">Natürlichere Stimme</h2><p class="sm">Die App nutzt die Stimmen deines iPhones. Die Standardstimme klingt blechern – die besseren musst du einmal kostenlos laden:</p><ol class="sm" style="line-height:1.6"><li>Einstellungen → <b>Bedienungshilfen</b></li><li><b>Gesprochene Inhalte</b> → <b>Stimmen</b> → <b>Deutsch</b></li><li>z. B. <b>Anna (Premium)</b>, <b>Helena (Erweitert)</b> oder <b>Markus (Erweitert)</b> laden</li><li>App neu öffnen und hier unter „Stimme“ auswählen (⭐ = hohe Qualität)</li></ol><p class="sm mut">Für Englisch genauso, z. B. „Daniel (Premium)“ – klingt wie ein echter Caller.</p><button class="btn" onclick="this.closest('.modal-bg').remove()">Alles klar</button>`));
   on(m, '[data-s="caller"]', 'click', () => { const bg = m.closest('.modal-bg'); if (!bg) setTimeout(render, 10); });
-  on(m, '[data-test]', 'click', () => { impact(me().board); setTimeout(() => say(CALL.score(180), null, { flush: true }), 200); });
+  on(m, '[data-test]', 'click', () => { impact(me().board); setTimeout(() => callout('score', 180, '', { flush: true }), 200); });
+  const ps = $('#prost', m); if (ps) proManifest(S.settings.caller).then(man => { ps.textContent = man ? `Profi-Caller bereit (${man.voice || 'ElevenLabs'}, ${man.keys.length} Ansagen)` : 'Profi-Caller noch nicht aufgenommen – bis dahin wird die KI- bzw. Gerätestimme genutzt.'; });
   m.addEventListener('input', e => { if (e.target.dataset.vol != null) { S.settings.volume = +e.target.value; save(); } });
 }
 V.settings = () => {
@@ -2248,7 +2277,7 @@ function loadStoreFrom(d) { const x = Object.assign({}, d); x.players = x.player
 /* ================= START ================= */
 document.addEventListener('click', () => ac(), { once: true });
 cloudInit();
-setTimeout(() => { const l = S.settings.caller; if (S.settings.voiceEngine === 'ai' && l && l !== 'off') piperInstalled(l).then(ok => ok && piperWarmup(l)); }, 2500);
+setTimeout(() => { const l = S.settings.caller; if (l && l !== 'off') proManifest(l); if (S.settings.voiceEngine !== 'device' && l && l !== 'off') piperInstalled(l).then(ok => ok && piperWarmup(l)); }, 2500);
 try { const cq = new URLSearchParams(location.search).get('chat'); if (cq && me()) route = { name: 'chatroom', p: { fid: cq } }; } catch (e) {}
 try { if (!me() && new URLSearchParams(location.search).get('invite')) route = { name: 'account', p: { mode: 'reg' } }; } catch (e) {}
 render();

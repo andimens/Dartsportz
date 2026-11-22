@@ -2,7 +2,7 @@
 /* ================= STORE ================= */
 const LS_KEY = 'dartsportz_v1';
 let mem = null;
-const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', voiceEngine: 'ai', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
+const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', voiceEngine: 'pro', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
 function loadStore() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) {}
@@ -233,9 +233,37 @@ function piperSay(text, lang, opts) {
 }
 // häufige Ansagen vorab berechnen, damit sie sofort kommen
 async function piperWarmup(lang) { try { for (const n of [180, 140, 100, 60, 45, 26, 0]) await piperBuffer(CALL.score(n), lang); } catch (e) {} }
+/* ---------- Profi-Ansager: vorab aufgenommene Clips (ElevenLabs) ---------- */
+const PRO = { man: {}, bufs: new Map(), q: Promise.resolve(), tok: 0 };
+async function proManifest(lang) {
+  if (PRO.man[lang] !== undefined) return PRO.man[lang];
+  try { const r = await fetch(`audio/${lang}/manifest.json`, { cache: 'no-cache' }); PRO.man[lang] = r.ok ? await r.json() : null; } catch (e) { PRO.man[lang] = null; }
+  return PRO.man[lang];
+}
+async function proBuf(lang, key) {
+  const k = lang + '/' + key; if (PRO.bufs.has(k)) return PRO.bufs.get(k);
+  const r = await fetch(`audio/${lang}/${key}.mp3`); if (!r.ok) throw new Error('fehlt'); const b = await ac().decodeAudioData(await r.arrayBuffer());
+  PRO.bufs.set(k, b); return b;
+}
+function proPlay(lang, keys, opts = {}) {
+  if (opts.flush) PRO.tok++; const tok = PRO.tok;
+  const ps = keys.map(k => proBuf(lang, k)); ps.forEach(p => p.catch(() => {}));
+  PRO.q = PRO.q.then(async () => { for (const p of ps) { if (tok !== PRO.tok) return; try { await piperPlay(await p, 1); } catch (e) {} } });
+}
+// Ansage nach Art: score / bust / game / match / require / first
+function callout(kind, n, name, opts = {}) {
+  const lang = S.settings.caller; if (!lang || lang === 'off') return;
+  const man = PRO.man[lang];
+  if (S.settings.voiceEngine === 'pro' && man) {
+    const keys = kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? ['gameshot'] : kind === 'match' ? ['gameshot_match'] : kind === 'first' ? ['gameon'] : kind === 'require' ? ['require', 'r_' + n] : [];
+    if (keys.every(k => man.keys.includes(k))) return proPlay(lang, keys, opts);
+  }
+  const t = kind === 'score' ? CALL.score(n) : kind === 'bust' ? CALL.bust() : kind === 'game' ? CALL.game(name || '') : kind === 'match' ? CALL.match(name || '') : kind === 'first' ? CALL.first(name || '') : kind === 'require' ? CALL.require(name || '', n) : '';
+  if (t) say(t, null, opts);
+}
 function say(text, lang, opts = {}) {
   lang = lang || S.settings.caller; if (!lang || lang === 'off') return;
-  if (S.settings.voiceEngine === 'ai' && PIPER.ready[lang]) return piperSay(text, lang, opts);
+  if ((S.settings.voiceEngine === 'ai' || S.settings.voiceEngine === 'pro') && PIPER.ready[lang]) return piperSay(text, lang, opts);
   webSay(text, lang, opts);
 }
 function webSay(text, lang, opts = {}) {

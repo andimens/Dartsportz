@@ -309,9 +309,9 @@ function settingsBlock() {
     ${sw('sound', 'Aufprall-Sound')}<div class="field"><label>Lautstärke</label><input type="range" min="0" max="1" step=".05" value="${s.volume}" data-vol></div>
     ${sw('zoom', 'Großansicht beim Wurf (Hintergrund unscharf)')}
     <div class="lbl">Ansager</div>${seg('caller', [['off', 'Aus'], ['de', 'Deutsch'], ['en', 'Englisch']])}
-    ${s.caller !== 'off' ? `<div class="field"><label>Sprachausgabe</label><div class="seg" style="margin:0"><button data-s="voiceEngine" data-v="ai" class="${s.voiceEngine === 'ai' ? 'on' : ''}">🎙 Natürlich (KI)</button><button data-s="voiceEngine" data-v="device" class="${s.voiceEngine !== 'ai' ? 'on' : ''}">📱 Gerätestimme</button></div></div>` : ''}
+    ${s.caller !== 'off' ? `<div class="field"><label>Sprachausgabe</label><div class="seg" style="margin:0"><button data-s="voiceEngine" data-v="pro" class="${s.voiceEngine === 'pro' ? 'on' : ''}">🔥 Profi-Caller</button><button data-s="voiceEngine" data-v="ai" class="${s.voiceEngine === 'ai' ? 'on' : ''}">🎙 KI</button><button data-s="voiceEngine" data-v="device" class="${s.voiceEngine === 'device' ? 'on' : ''}">📱 Gerät</button></div><div class="xs mut" id="prost" style="margin-top:4px"></div></div>` : ''}
     ${s.caller !== 'off' && s.voiceEngine === 'ai' ? `<div class="card" style="background:var(--card2)" id="aiv"><b>KI-Stimme ${s.caller === 'en' ? 'Englisch' : 'Deutsch'}</b><div class="mut xs">Klingt wie ein echter Sprecher – auf iPhone und Android gleich. Einmaliger Download (ca. 60 MB, am besten im WLAN), danach auch offline.</div><div class="bar" style="margin:8px 0;display:none" id="aivb"><i style="width:0"></i></div><button class="btn sm" id="aivdl" style="margin-top:6px">Prüfe …</button></div>` : ''}
-    ${s.caller !== 'off' && s.voiceEngine !== 'ai' ? `<div class="field"><label>Stimme</label><select data-voice="${s.caller}">${voicesFor(s.caller).sort((a, b) => voiceScore(b) - voiceScore(a)).map(v => `<option value="${esc(v.voiceURI)}" ${bestVoice(s.caller) === v ? 'selected' : ''}>${esc(v.name)}${voiceScore(v) >= 30 ? ' ⭐' : ''}</option>`).join('') || '<option>Systemstimme</option>'}</select></div>` : ''}
+    ${s.caller !== 'off' && s.voiceEngine === 'device' ? `<div class="field"><label>Stimme</label><select data-voice="${s.caller}">${voicesFor(s.caller).sort((a, b) => voiceScore(b) - voiceScore(a)).map(v => `<option value="${esc(v.voiceURI)}" ${bestVoice(s.caller) === v ? 'selected' : ''}>${esc(v.name)}${voiceScore(v) >= 30 ? ' ⭐' : ''}</option>`).join('') || '<option>Systemstimme</option>'}</select></div>` : ''}
     <button class="btn sm sec" data-test>🔊 Test</button> <button class="btn sm sec" data-vhelp>Natürlichere Stimme?</button>
     ${sw('botVoice', 'Bots sprechen (Sprachausgabe)')}${sw('vibrate', 'Vibration')}`;
 }
@@ -333,7 +333,8 @@ function bindSettings(m) {
   m.addEventListener('change', e => { const l = e.target.dataset.voice; if (l) { S.settings[l === 'en' ? 'voiceEn' : 'voiceDe'] = e.target.value; save(); say(CALL.score(180), null, { flush: true }); } });
   on(m, '[data-vhelp]', 'click', () => modal(`<h2 class="bb">Natürlichere Stimme</h2><p class="sm">Die App nutzt die Stimmen deines iPhones. Die Standardstimme klingt blechern – die besseren musst du einmal kostenlos laden:</p><ol class="sm" style="line-height:1.6"><li>Einstellungen → <b>Bedienungshilfen</b></li><li><b>Gesprochene Inhalte</b> → <b>Stimmen</b> → <b>Deutsch</b></li><li>z. B. <b>Anna (Premium)</b>, <b>Helena (Erweitert)</b> oder <b>Markus (Erweitert)</b> laden</li><li>App neu öffnen und hier unter „Stimme“ auswählen (⭐ = hohe Qualität)</li></ol><p class="sm mut">Für Englisch genauso, z. B. „Daniel (Premium)“ – klingt wie ein echter Caller.</p><button class="btn" onclick="this.closest('.modal-bg').remove()">Alles klar</button>`));
   on(m, '[data-s="caller"]', 'click', () => { const bg = m.closest('.modal-bg'); if (!bg) setTimeout(render, 10); });
-  on(m, '[data-test]', 'click', () => { impact(me().board); setTimeout(() => say(CALL.score(180), null, { flush: true }), 200); });
+  on(m, '[data-test]', 'click', () => { impact(me().board); setTimeout(() => callout('score', 180, '', { flush: true }), 200); });
+  const ps = $('#prost', m); if (ps) proManifest(S.settings.caller).then(man => { ps.textContent = man ? `Profi-Caller bereit (${man.voice || 'ElevenLabs'}, ${man.keys.length} Ansagen)` : 'Profi-Caller noch nicht aufgenommen – bis dahin wird die KI- bzw. Gerätestimme genutzt.'; });
   m.addEventListener('input', e => { if (e.target.dataset.vol != null) { S.settings.volume = +e.target.value; save(); } });
 }
 V.settings = () => {
@@ -364,7 +365,7 @@ function loadStoreFrom(d) { const x = Object.assign({}, d); x.players = x.player
 /* ================= START ================= */
 document.addEventListener('click', () => ac(), { once: true });
 cloudInit();
-setTimeout(() => { const l = S.settings.caller; if (S.settings.voiceEngine === 'ai' && l && l !== 'off') piperInstalled(l).then(ok => ok && piperWarmup(l)); }, 2500);
+setTimeout(() => { const l = S.settings.caller; if (l && l !== 'off') proManifest(l); if (S.settings.voiceEngine !== 'device' && l && l !== 'off') piperInstalled(l).then(ok => ok && piperWarmup(l)); }, 2500);
 try { const cq = new URLSearchParams(location.search).get('chat'); if (cq && me()) route = { name: 'chatroom', p: { fid: cq } }; } catch (e) {}
 try { if (!me() && new URLSearchParams(location.search).get('invite')) route = { name: 'account', p: { mode: 'reg' } }; } catch (e) {}
 render();
