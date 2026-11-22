@@ -317,5 +317,6 @@ function loadStoreFrom(d) { const x = Object.assign({}, d); x.players = x.player
 /* ================= START ================= */
 document.addEventListener('click', () => ac(), { once: true });
 cloudInit();
+try { if (!me() && new URLSearchParams(location.search).get('invite')) route = { name: 'account', p: { mode: 'reg' } }; } catch (e) {}
 render();
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claudeusercontent|claude\.ai/.test(location.host)) navigator.serviceWorker.register('sw.js').catch(() => {});

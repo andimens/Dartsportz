@@ -15,7 +15,7 @@ function go(name, p = {}) { route = { name, p }; render(); window.scrollTo(0, 0)
 function back() { go(route.p.from || 'home'); }
 function render() {
   const old = $('#app'); const app = old.cloneNode(false); old.replaceWith(app);
-  if (!me() && route.name !== 'game' && route.name !== 'pgame') { route = { name: 'welcome', p: {} }; }
+  if (!me() && !['game', 'pgame', 'account'].includes(route.name)) { route = { name: 'welcome', p: {} }; }
   const v = V[route.name](route.p);
   if (v.full) { app.innerHTML = v.html; $('.nav') && $('.nav').remove(); v.mount && v.mount(app); return; }
   app.innerHTML = `<div class="top">${v.left || ''}${v.title ? `<h1 class="bb">${v.title}</h1>` : ''}${v.right || ''}</div><div class="view">${v.html}</div>`;
@@ -36,7 +36,8 @@ function on(root, sel, ev, fn) { root.addEventListener(ev, e => { const t = e.ta
 /* ================= WILLKOMMEN ================= */
 V.welcome = () => ({
   nav: false, title: '', left: '<div class="logo"><b>DARTS<span>PORTZ</span></b></div>',
-  html: `<div class="card" style="text-align:center"><div style="font-size:54px">🎯</div><h2 class="bb" style="font-size:34px;margin:6px 0">Willkommen!</h2><p class="mut">Leg dein Profil an. Alles funktioniert offline – Login & Online-Spiele kommen mit der Supabase-Anbindung.</p></div>
+  html: `<div class="card" style="text-align:center"><div style="font-size:54px">🎯</div><h2 class="bb" style="font-size:34px;margin:6px 0">Willkommen!</h2><p class="mut">Leg dein Profil an. Alles funktioniert auch offline. Mit Account kommen Freunde, Live-Spiele und Chat dazu.</p></div>
+  <button class="btn sec" style="margin-bottom:12px" onclick="go('account', { mode: (localStorage.getItem('dsz_invite') ? 'reg' : 'login') })">🌍 Login / Registrieren mit Einladung</button>
   <div class="card"><div class="field"><label>Name</label><input id="wn" type="text" placeholder="z. B. Andreas"></div>
   <div class="field"><label>Land</label><select id="wc">${COUNTRIES.map(([c, n]) => `<option value="${c}">${flag(c)} ${n}</option>`).join('')}</select></div>
   <div class="field"><label>Lieblingsscheibe</label><select id="wb">${BOARDS.map(b => `<option value="${b.id}">${b.name}</option>`).join('')}</select></div></div>
