@@ -1,6 +1,6 @@
 /* ================= SPIELER ================= */
 const COLORS = ['#ff6b00', '#22c55e', '#3b82f6', '#a855f7', '#ef4444', '#eab308', '#14b8a6', '#ec4899', '#f97316', '#84cc16'];
-function playerById(id) { return S.players.find(p => p.id === id) || BOT_PLAYER(id); }
+function playerById(id) { const al = S.aliases && S.aliases[id]; if (al) id = al; return S.players.find(p => p.id === id) || BOT_PLAYER(id); }
 function me() { return S.players.find(p => p.id === S.me); }
 function newPlayer(o = {}) {
   const p = Object.assign({ id: uid(), name: 'Spieler', nick: '', country: 'DE', age: '', height: '', hand: 'rechts', board: BOARDS[0].id, color: COLORS[S.players.length % COLORS.length], guest: true, avatar: null, dart: Object.assign({}, DEFAULT_DART), linkCode: Math.random().toString(36).slice(2, 8).toUpperCase(), created: Date.now() }, o);

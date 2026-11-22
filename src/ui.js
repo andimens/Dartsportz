@@ -127,7 +127,7 @@ V.play = () => {
         const sides = buildSides(su); if (!sides) return;
         const stt = { ...st, start: st.start === 'custom' ? st.custom : st.start };
         const remote = online() && sides.some(sd => sd.members.some(id => { const pp = playerById(id); return pp && pp.uid && pp.uid !== AUTH.user.id; }));
-        if (remote) return modal(`<h2 class="bb">Wie spielt ihr?</h2><button class="btn" id="lv" style="margin-bottom:10px">📡 Live auf mehreren Handys</button><button class="btn sec" id="lc">📱 Alle auf diesem Handy</button>`, (m, close) => { $('#lv', m).onclick = () => { close(); whoStarts(sides, s0 => startLiveMatch(sides, stt, s0)); }; $('#lc', m).onclick = () => { close(); whoStarts(sides, s0 => launchMatch(sides, stt, s0)); }; });
+        if (remote) return modal(`<h2 class="bb">Wie spielt ihr?</h2><button class="btn" id="lv" style="margin-bottom:10px">📡 Live auf mehreren Handys</button><button class="btn sec" id="lc">📱 Alle auf diesem Handy</button>`, (m, close) => { $('#lv', m).onclick = () => { close(); startLiveMatch(sides, stt, 0); }; $('#lc', m).onclick = () => { close(); whoStarts(sides, s0 => launchMatch(sides, stt, s0)); }; });
         whoStarts(sides, starter => launchMatch(sides, stt, starter));
       });
     }
@@ -183,20 +183,21 @@ function whoStarts(sides, cb) {
     });
   });
 }
-function spinWheel(sides, cb) {
+function spinWheel(sides, cb, fixedWin, auto) {
   const n = sides.length, seg = 360 / n;
   let svg = '<svg viewBox="-100 -100 200 200">';
   sides.forEach((s, i) => { const [ax, ay] = polar(98, i * seg), [bx, by] = polar(98, (i + 1) * seg); svg += `<path d="M0 0L${ax} ${ay}A98 98 0 ${seg > 180 ? 1 : 0} 1 ${bx} ${by}Z" fill="${s.color}" stroke="#111" stroke-width="1.5"/>`; const [x, y] = polar(62, i * seg + seg / 2); svg += `<text x="${x}" y="${y}" fill="#111" font-size="${n > 4 ? 11 : 14}" font-weight="800" text-anchor="middle" dominant-baseline="central" transform="rotate(${i * seg + seg / 2} ${x} ${y})">${esc(s.name.slice(0, 12))}</text>`; });
   svg += '<circle r="12" fill="#fff"/></svg>';
-  const win = Math.floor(Math.random() * n);
-  modal(`<h2 class="bb">Rad drehen</h2><div class="wheel"><div class="ptr"></div>${svg}</div><div id="wres" class="bb" style="text-align:center;font-size:30px;color:var(--or);min-height:36px"></div><button class="btn" id="wgo">Drehen!</button>`, (m, close) => {
+  const win = fixedWin != null ? fixedWin : Math.floor(Math.random() * n);
+  modal(`<h2 class="bb">${auto ? 'Auslosung – wer beginnt?' : 'Rad drehen'}</h2><div class="wheel"><div class="ptr"></div>${svg}</div><div id="wres" class="bb" style="text-align:center;font-size:30px;color:var(--or);min-height:36px"></div><button class="btn" id="wgo">Drehen!</button>`, (m, close) => {
     const btn = $('#wgo', m); let spun = false;
     btn.onclick = () => {
       if (spun) { close(); cb(win); return; }
       spun = true; btn.textContent = '…'; const target = 360 * 6 + (360 - (win * seg + seg / 2)) + (Math.random() - .5) * seg * .6;
       $('svg', $('.wheel', m)).style.transform = `rotate(${target}deg)`; chime();
-      setTimeout(() => { $('#wres', m).textContent = sides[win].name + ' beginnt!'; btn.textContent = 'Spiel starten'; chime(true); }, 3300);
+      setTimeout(() => { $('#wres', m).textContent = sides[win].name + ' beginnt!'; btn.textContent = 'Spiel starten'; chime(true); if (auto) setTimeout(() => { if (document.body.contains(m)) { close(); cb(win); } }, 1600); }, 3300);
     };
+    if (auto) setTimeout(() => btn.onclick(), 500);
   });
 }
 
