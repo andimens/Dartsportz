@@ -142,7 +142,7 @@ function throwDart(n, mu, pt, human, silent) {
   const bid = m.boardId;
   if (!silent) setTimeout(() => impact(bid, n === 0), ms);
   const res = addDart(m, n, mu, pt);
-  if (S.settings.callEach && !silent && n > 0) setTimeout(() => callout('score', n * (n === 0 ? 0 : mu)), ms);
+  if (S.settings.callEach && !silent && n > 0) callout('score', n * mu);
   if (human) G.mult = 1;
   renderGame(); save(); livePush();
   if (res.ended) afterVisit(res, side);
@@ -151,7 +151,7 @@ function throwDart(n, mu, pt, human, silent) {
 function afterVisit(res, side) {
   const m = G.m, v = res.visit, sd = m.sides[side];
   G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100);
-  if (!res.legWon) callout(v.bust ? 'bust' : 'score', v.scored);
+  if (!res.legWon) callout(v.bust ? 'bust' : S.settings.callEach ? 'total' : 'score', v.scored);
   if (v.scored === 180) chime();
   const bot = m.sides.find(s => s.bot);
   if (bot && Math.random() < .55) {

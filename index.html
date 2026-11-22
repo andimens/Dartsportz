@@ -466,11 +466,11 @@ function callout(kind, n, name, opts = {}) {
   if (S.settings.voiceEngine === 'pro' && man) {
     const nk = callKeyOf(name);
     const hasN = nk && man.keys.includes(nk);
-    const keys = kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? (hasN ? ['gameshot', nk] : ['gameshot']) : kind === 'match' ? (hasN ? ['gameshot_match', nk] : ['gameshot_match']) : kind === 'first' ? (hasN ? [nk, 'begins', 'gameon'] : ['gameon']) : kind === 'require' ? (hasN ? [nk, 'require', 'r_' + n] : ['require', 'r_' + n]) : [];
+    const keys = kind === 'total' ? (man.keys.includes('totalis') ? ['totalis', 's_' + n] : ['s_' + n]) : kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? (hasN ? ['gameshot', nk] : ['gameshot']) : kind === 'match' ? (hasN ? ['gameshot_match', nk] : ['gameshot_match']) : kind === 'first' ? (hasN ? [nk, 'begins', 'gameon'] : ['gameon']) : kind === 'require' ? (hasN ? [nk, 'require', 'r_' + n] : ['require', 'r_' + n]) : [];
     if (keys.every(k => man.keys.includes(k))) return proPlay(lang, keys, opts);
   }
   if (name && typeof name === 'object') name = pName(name);
-  const t = kind === 'score' ? CALL.score(n) : kind === 'bust' ? CALL.bust() : kind === 'game' ? CALL.game(name || '') : kind === 'match' ? CALL.match(name || '') : kind === 'first' ? CALL.first(name || '') : kind === 'require' ? CALL.require(name || '', n) : '';
+  const t = kind === 'total' ? (n === 0 ? CALL.score(0) : 'Total is ' + n) : kind === 'score' ? CALL.score(n) : kind === 'bust' ? CALL.bust() : kind === 'game' ? CALL.game(name || '') : kind === 'match' ? CALL.match(name || '') : kind === 'first' ? CALL.first(name || '') : kind === 'require' ? CALL.require(name || '', n) : '';
   if (t) say(t, null, opts);
 }
 function say(text, lang, opts = {}) {
@@ -1194,7 +1194,7 @@ function throwDart(n, mu, pt, human, silent) {
   const bid = m.boardId;
   if (!silent) setTimeout(() => impact(bid, n === 0), ms);
   const res = addDart(m, n, mu, pt);
-  if (S.settings.callEach && !silent && n > 0) setTimeout(() => callout('score', n * (n === 0 ? 0 : mu)), ms);
+  if (S.settings.callEach && !silent && n > 0) callout('score', n * mu);
   if (human) G.mult = 1;
   renderGame(); save(); livePush();
   if (res.ended) afterVisit(res, side);
@@ -1203,7 +1203,7 @@ function throwDart(n, mu, pt, human, silent) {
 function afterVisit(res, side) {
   const m = G.m, v = res.visit, sd = m.sides[side];
   G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100);
-  if (!res.legWon) callout(v.bust ? 'bust' : 'score', v.scored);
+  if (!res.legWon) callout(v.bust ? 'bust' : S.settings.callEach ? 'total' : 'score', v.scored);
   if (v.scored === 180) chime();
   const bot = m.sides.find(s => s.bot);
   if (bot && Math.random() < .55) {
@@ -1528,7 +1528,7 @@ function pThrow(n, mu, silent) {
 function pNext() {
   const P = PG.P, g = PARTY[P.mode];
   const sc = P.darts.reduce((a, d) => a + d.n * d.m, 0);
-  if (P.mode !== 'killer' && P.mode !== 'cricket') callout('score', sc);
+  if (P.mode !== 'killer' && P.mode !== 'cricket') callout(S.settings.callEach ? 'total' : 'score', sc);
   P.darts = []; PG.clearT = setTimeout(() => { PG.stuck.forEach(e => e.remove()); PG.stuck = []; PG.clearT = null; }, 1000);
   if (g.over(P) != null) return pFinish();
   const n = P.players.length; let nx = P.cur, guard = 0;
@@ -1776,7 +1776,7 @@ function applyRemote(row) {
     else { const leg = [...nm.legs].reverse().find(l => l.visits.length); if (leg) { vend = leg.visits[leg.visits.length - 1]; d = vend.darts[vend.darts.length - 1]; } }
     if (d && S.settings.callEach && d.n > 0) callout('score', d.n * d.m);
     if (d) { const ms = animateThrow(d.x != null ? [d.x, d.y] : pointFor(d.n, d.m), vend ? vend.pid : curPid(nm), nm.cur.darts.slice(0, -1), nm.boardId, dLabelFull(d.n, d.m), $('#bin'), G.stuck); setTimeout(() => impact(nm.boardId, d.n === 0), ms); }
-    if (vend) { callout(vend.bust ? 'bust' : 'score', vend.scored); G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100); }
+    if (vend) { callout(vend.bust ? 'bust' : S.settings.callEach ? 'total' : 'score', vend.scored); G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100); }
     renderGame();
   } else { renderGame(); redrawStuck(); }
   if (nm.finished && !old.finished) { G.m = S.active; finishMatch(); }

@@ -275,11 +275,11 @@ function callout(kind, n, name, opts = {}) {
   if (S.settings.voiceEngine === 'pro' && man) {
     const nk = callKeyOf(name);
     const hasN = nk && man.keys.includes(nk);
-    const keys = kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? (hasN ? ['gameshot', nk] : ['gameshot']) : kind === 'match' ? (hasN ? ['gameshot_match', nk] : ['gameshot_match']) : kind === 'first' ? (hasN ? [nk, 'begins', 'gameon'] : ['gameon']) : kind === 'require' ? (hasN ? [nk, 'require', 'r_' + n] : ['require', 'r_' + n]) : [];
+    const keys = kind === 'total' ? (man.keys.includes('totalis') ? ['totalis', 's_' + n] : ['s_' + n]) : kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? (hasN ? ['gameshot', nk] : ['gameshot']) : kind === 'match' ? (hasN ? ['gameshot_match', nk] : ['gameshot_match']) : kind === 'first' ? (hasN ? [nk, 'begins', 'gameon'] : ['gameon']) : kind === 'require' ? (hasN ? [nk, 'require', 'r_' + n] : ['require', 'r_' + n]) : [];
     if (keys.every(k => man.keys.includes(k))) return proPlay(lang, keys, opts);
   }
   if (name && typeof name === 'object') name = pName(name);
-  const t = kind === 'score' ? CALL.score(n) : kind === 'bust' ? CALL.bust() : kind === 'game' ? CALL.game(name || '') : kind === 'match' ? CALL.match(name || '') : kind === 'first' ? CALL.first(name || '') : kind === 'require' ? CALL.require(name || '', n) : '';
+  const t = kind === 'total' ? (n === 0 ? CALL.score(0) : 'Total is ' + n) : kind === 'score' ? CALL.score(n) : kind === 'bust' ? CALL.bust() : kind === 'game' ? CALL.game(name || '') : kind === 'match' ? CALL.match(name || '') : kind === 'first' ? CALL.first(name || '') : kind === 'require' ? CALL.require(name || '', n) : '';
   if (t) say(t, null, opts);
 }
 function say(text, lang, opts = {}) {

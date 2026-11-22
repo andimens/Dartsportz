@@ -193,7 +193,7 @@ function pThrow(n, mu, silent) {
 function pNext() {
   const P = PG.P, g = PARTY[P.mode];
   const sc = P.darts.reduce((a, d) => a + d.n * d.m, 0);
-  if (P.mode !== 'killer' && P.mode !== 'cricket') callout('score', sc);
+  if (P.mode !== 'killer' && P.mode !== 'cricket') callout(S.settings.callEach ? 'total' : 'score', sc);
   P.darts = []; PG.clearT = setTimeout(() => { PG.stuck.forEach(e => e.remove()); PG.stuck = []; PG.clearT = null; }, 1000);
   if (g.over(P) != null) return pFinish();
   const n = P.players.length; let nx = P.cur, guard = 0;

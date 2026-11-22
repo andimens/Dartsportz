@@ -221,7 +221,7 @@ function applyRemote(row) {
     else { const leg = [...nm.legs].reverse().find(l => l.visits.length); if (leg) { vend = leg.visits[leg.visits.length - 1]; d = vend.darts[vend.darts.length - 1]; } }
     if (d && S.settings.callEach && d.n > 0) callout('score', d.n * d.m);
     if (d) { const ms = animateThrow(d.x != null ? [d.x, d.y] : pointFor(d.n, d.m), vend ? vend.pid : curPid(nm), nm.cur.darts.slice(0, -1), nm.boardId, dLabelFull(d.n, d.m), $('#bin'), G.stuck); setTimeout(() => impact(nm.boardId, d.n === 0), ms); }
-    if (vend) { callout(vend.bust ? 'bust' : 'score', vend.scored); G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100); }
+    if (vend) { callout(vend.bust ? 'bust' : S.settings.callEach ? 'total' : 'score', vend.scored); G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100); }
     renderGame();
   } else { renderGame(); redrawStuck(); }
   if (nm.finished && !old.finished) { G.m = S.active; finishMatch(); }
