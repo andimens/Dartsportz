@@ -1,6 +1,7 @@
 /* ================= ONLINE (Supabase) ================= */
 const SB_URL = 'https://vsreutpxuwckyvycelwt.supabase.co';
 const SB_KEY = 'sb_publishable_QxtipKYdcDu-Bo4hrC7nIg_TKjmYI1y';
+const VAPID_PUB = 'BMlc2UaOCeAyQ6AqmYAiJTSAiRkG_0Rf57AfLNL6Z0Sapwd6gseOsogvRlaXdeg2IeLue_kgqEgEcdSExQ8Dr14';
 let sb = null;
 const AUTH = { user: null, profile: null, friends: [], unread: {}, ready: false };
 const online = () => !!(sb && AUTH.user && navigator.onLine !== false);
@@ -124,6 +125,7 @@ async function startLiveMatch(sides, settings, starter) {
   const { data, error } = await sb.from('live_games').insert({ host: AUTH.user.id, players: uids, status: 'invited', state: liveStripState(m) }).select().single();
   if (error) return toast('Fehler: ' + error.message, 3500);
   m.liveId = data.id; LIVE.id = data.id; LIVE.version = 0; LIVE.host = true;
+  uids.filter(x => x !== AUTH.user.id).forEach(x => sendPush(x, '🎯 ' + me().name + ' fordert dich heraus!', `${settings.start} · First to ${settings.count} – tippe zum Annehmen`, '/', 'live'));
   S.active = m; save(true);
   const names = AUTH.friends.filter(f => uids.includes(f.id)).map(f => f.name).join(', ');
   const close = modal(`<div style="text-align:center;font-size:50px" class="pulse">📡</div><h2 class="bb">Warte auf ${esc(names)}…</h2><p class="mut sm" style="text-align:center">Einladung gesendet. Sobald angenommen wird, startet das Spiel automatisch.</p><button class="btn sec" id="lgo">Trotzdem starten</button><button class="btn ghost" id="lx" style="margin-top:8px">Abbrechen</button>`, (md, c) => {
@@ -300,7 +302,7 @@ V.chatroom = (p) => {
       const { data } = await sb.from('chat_messages').select('*').or(`and(sender.eq.${u},receiver.eq.${p.fid}),and(sender.eq.${p.fid},receiver.eq.${u})`).order('created_at').limit(200);
       CHAT.msgs = data || []; drawChat();
       sb.from('chat_messages').update({ read_at: new Date().toISOString() }).eq('receiver', u).eq('sender', p.fid).is('read_at', null).then(() => {}); delete AUTH.unread[p.fid]; updateBadge();
-      const send = async () => { const t = $('#ct').value.trim(); if (!t) return; $('#ct').value = ''; const { data: m, error } = await sb.from('chat_messages').insert({ sender: u, receiver: p.fid, body: t }).select().single(); if (error) return toast(error.message); CHAT.msgs.push(m); drawChat(); };
+      const send = async () => { const t = $('#ct').value.trim(); if (!t) return; $('#ct').value = ''; const { data: m, error } = await sb.from('chat_messages').insert({ sender: u, receiver: p.fid, body: t }).select().single(); if (error) return toast(error.message); CHAT.msgs.push(m); drawChat(); sendPush(p.fid, '💬 ' + me().name, t, '/?chat=' + u, 'chat-' + u); };
       $('#cs').onclick = send; $('#ct').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
     }
   };
@@ -309,4 +311,30 @@ function drawChat() {
   const el = $('#cm'); if (!el) return; const u = AUTH.user.id;
   el.innerHTML = CHAT.msgs.map(m => `<div class="chat-msg" style="align-self:${m.sender === u ? 'flex-end' : 'flex-start'};background:${m.sender === u ? 'var(--or)' : 'var(--card2)'}">${esc(m.body)}<div class="xs" style="opacity:.6;text-align:right">${new Date(m.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</div></div>`).join('') || '<div class="empty">Schreib die erste Nachricht 👋</div>';
   window.scrollTo(0, document.body.scrollHeight);
+}
+
+/* ---------- Push-Benachrichtigungen ---------- */
+function pushSupported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+function isStandalone() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+function b64u(s) { const p = '='.repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); }
+async function enablePush() {
+  if (!online()) return toast('Bitte zuerst einloggen');
+  if (/iPhone|iPad/.test(navigator.userAgent) && !isStandalone()) return modal(`<h2 class="bb">Erst installieren</h2><p>Auf dem iPhone funktionieren Push-Nachrichten nur, wenn Dartsportz auf dem Home-Bildschirm liegt:</p><ol class="sm" style="line-height:1.6"><li>In Safari unten auf <b>Teilen</b> (□↑)</li><li><b>„Zum Home-Bildschirm“</b></li><li>App über das neue Symbol öffnen und hier nochmal tippen</li></ol><button class="btn" onclick="this.closest('.modal-bg').remove()">OK</button>`);
+  if (!pushSupported()) return toast('Dieses Gerät unterstützt keine Push-Nachrichten', 3000);
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') return toast('Benachrichtigungen wurden nicht erlaubt. Ändern in den iPhone-Einstellungen → Dartsportz.', 4000);
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUB) });
+  const js = sub.toJSON();
+  await sb.from('push_subscriptions').delete().eq('user_id', AUTH.user.id).eq('subscription->>endpoint', js.endpoint);
+  const { error } = await sb.from('push_subscriptions').insert({ user_id: AUTH.user.id, subscription: js });
+  if (error) return toast('Fehler: ' + error.message, 3500);
+  S.settings.push = true; save(); toast('🔔 Push-Benachrichtigungen aktiv'); render();
+}
+async function sendPush(to, title, body, url, tag) {
+  if (!online()) return;
+  try { const { data } = await sb.auth.getSession(); const tk = data.session && data.session.access_token; if (!tk) return;
+    fetch('/api/push', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk }, body: JSON.stringify({ to, title, body, url, tag }) }).catch(() => {});
+  } catch (e) {}
 }

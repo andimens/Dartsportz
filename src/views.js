@@ -298,10 +298,12 @@ V.settings = () => {
     html: `<div class="card">${settingsBlock()}</div>
     ${p.admin ? `<div class="lbl">Admin · Scheiben-Sounds</div><div class="card list">${BOARDS.map(b => { const cur = S.settings.boardSounds[b.id] || b.sound; const custom = cur.startsWith('data:'); return `<div class="it"><div style="width:34px;height:34px;flex:none">${boardSVG(b, { numbers: false })}</div><div class="sp"><b class="sm">${esc(b.name)}</b><select data-bs="${b.id}" style="padding:6px;margin-top:4px;font-size:14px">${Object.entries(SOUND_PRESETS).map(([k, v]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${v.label}</option>`).join('')}${custom ? '<option selected value="__c">Eigene Aufnahme</option>' : ''}</select></div><button class="btn sm sec" data-up="${b.id}">⤒</button><button class="btn sm sec" data-play="${b.id}">▶</button></div>`; }).join('')}<div class="xs mut" style="margin-top:8px">Mit ⤒ lädst du eine eigene Aufnahme hoch (kurze Audiodatei). Die Synchronisation an alle Nutzer folgt mit Supabase.</div></div>` : ''}
     <div class="lbl">Daten</div><div class="card"><div class="grid2"><button class="btn sec" id="bex">Backup kopieren</button><button class="btn sec" id="bim">Backup einfügen</button></div><button class="btn ghost" id="breset" style="color:#f87171">Alle Daten löschen</button></div>
+    <div class="lbl">Push-Benachrichtigungen</div><div class="card"><div class="row"><div class="sp"><b>Chat & Spieleinladungen</b><div class="mut xs">${typeof Notification !== 'undefined' && Notification.permission === 'granted' && S.settings.push ? 'Aktiv auf diesem Gerät' : 'Benachrichtigt dich auch, wenn die App zu ist'}</div></div><button class="btn sm ${S.settings.push ? 'sec' : ''}" id="pon">${S.settings.push ? 'Neu verbinden' : 'Aktivieren'}</button></div></div>
     <div class="lbl">Online & Login</div><button class="card row" style="width:100%" onclick="go('account')"><span style="font-size:24px">🌍</span><div class="sp" style="text-align:left"><b>${AUTH.user ? 'Eingeloggt' : 'Login / Registrieren'}</b><div class="mut sm">${AUTH.user ? esc(AUTH.user.email) : 'Freunde, Live-Spiele, Chat'}</div></div><span class="mut">›</span></button>
     <p class="xs dim" style="text-align:center">Dartsportz v0.3 · offline-fähig</p>`,
     mount(r) {
       bindSettings(r);
+      $('#pon', r).onclick = enablePush;
       on(r, '[data-bs]', 'change', () => {});
       r.addEventListener('change', e => { const b = e.target.dataset.bs; if (b && e.target.value !== '__c') { S.settings.boardSounds[b] = e.target.value; save(); impact(b); pushBoardSounds(); } });
       on(r, '[data-play]', 'click', b => impact(b.dataset.play));
@@ -317,6 +319,7 @@ function loadStoreFrom(d) { const x = Object.assign({}, d); x.players = x.player
 /* ================= START ================= */
 document.addEventListener('click', () => ac(), { once: true });
 cloudInit();
+try { const cq = new URLSearchParams(location.search).get('chat'); if (cq && me()) route = { name: 'chatroom', p: { fid: cq } }; } catch (e) {}
 try { if (!me() && new URLSearchParams(location.search).get('invite')) route = { name: 'account', p: { mode: 'reg' } }; } catch (e) {}
 render();
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claudeusercontent|claude\.ai/.test(location.host)) navigator.serviceWorker.register('sw.js').catch(() => {});
