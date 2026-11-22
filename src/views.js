@@ -164,7 +164,7 @@ V.stats = () => {
         <div class="card"><div class="lbl" style="margin-top:0">Checkout-Quote pro Doppel</div>${Object.entries(t.dbl).sort((a, b) => b[1].a - a[1].a).map(([k, v]) => `<div class="row sm" style="margin:6px 0"><b style="width:44px">${k}</b><div class="bar sp"><i style="width:${v.h / v.a * 100}%"></i></div><span style="width:86px;text-align:right">${Math.round(v.h / v.a * 100)}% (${v.h}/${v.a})</span></div>`).join('') || '<div class="mut sm">Noch keine Checkout-Versuche</div>'}</div>`;
     }
   } else if (statUI.tab === 'train') {
-    const tr = S.training.filter(t => (t.pid || S.me) === pid && pf.f(t));
+    const tr = S.training.filter(t => (t.pid || S.me) === pid && pf.f(t) && !statHidden(pid, t.date));
     if (!tr.length) body = '<div class="empty">Noch keine Trainings in diesem Zeitraum.</div>';
     else {
       const g = {}; tr.forEach(t => { const k = drillTitle(t); (g[k] = g[k] || []).push(t); });
@@ -178,15 +178,46 @@ V.stats = () => {
   return {
     title: 'STATISTIKEN', left: backBtn(), right: spacer,
     html: `<div class="chips">${pl}</div><div class="seg"><button data-tab="x01" class="${statUI.tab === 'x01' ? 'on' : ''}">X01</button><button data-tab="train" class="${statUI.tab === 'train' ? 'on' : ''}">Training</button><button data-tab="h2h" class="${statUI.tab === 'h2h' ? 'on' : ''}">Bilanz</button></div>
-      ${body}<div class="card"><div class="seg" style="margin-top:0"><button data-per="month" class="${statUI.per === 'month' ? 'on' : ''}">Monat</button><button data-per="year" class="${statUI.per === 'year' ? 'on' : ''}">Jahr</button><button data-per="all" class="${statUI.per === 'all' ? 'on' : ''}">Allzeit</button></div>${statUI.per !== 'all' ? `<div class="row"><button class="btn sm sec" data-off="-1">‹</button><b class="sp" style="text-align:center">${pf.label}</b><button class="btn sm sec" data-off="1">›</button></div>` : ''}</div>`,
+      ${body}<div class="card"><div class="seg" style="margin-top:0"><button data-per="month" class="${statUI.per === 'month' ? 'on' : ''}">Monat</button><button data-per="year" class="${statUI.per === 'year' ? 'on' : ''}">Jahr</button><button data-per="all" class="${statUI.per === 'all' ? 'on' : ''}">Allzeit</button></div>${statUI.per !== 'all' ? `<div class="row"><button class="btn sm sec" data-off="-1">‹</button><b class="sp" style="text-align:center">${pf.label}</b><button class="btn sm sec" data-off="1">›</button></div>` : ''}</div>
+      <div class="grid2"><button class="btn sec sm" style="width:100%" data-rst="day">↺ Heute zurücksetzen</button><button class="btn ghost sm" style="width:100%;color:#f87171" data-rst="all">🗑 Alles zurücksetzen</button></div>`,
     mount(r) {
       on(r, '[data-pid]', 'click', b => { statUI.pid = b.dataset.pid; render(); });
       on(r, '[data-tab]', 'click', b => { statUI.tab = b.dataset.tab; render(); });
+      on(r, '[data-rst]', 'click', b => b.dataset.rst === 'day' ? resetToday(pid) : resetAll(pid));
       on(r, '[data-per]', 'click', b => { statUI.per = b.dataset.per; statUI.off = 0; render(); });
       on(r, '[data-off]', 'click', b => { statUI.off = Math.min(0, statUI.off + +b.dataset.off); render(); });
     }
   };
 };
+
+/* ---------- Statistik zurücksetzen ---------- */
+const ADMIN_MAIL = 'Andi.mens@web.de';
+async function resetToday(pid) {
+  const p = playerById(pid);
+  if (!(await confirmBox(`Heutige Statistik von ${pName(p)} zurücksetzen?`, 'Zurücksetzen'))) return;
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  S.statResets = S.statResets || {}; const r = S.statResets[pid] = S.statResets[pid] || {};
+  (r.ranges = r.ranges || []).push([d.getTime(), Date.now() + 1]); save(true); toast('Heutige Statistik zurückgesetzt'); render();
+}
+function doResetAll(pid) { S.statResets = S.statResets || {}; S.statResets[pid] = { all: Date.now() + 1 }; save(true); toast('Komplette Statistik zurückgesetzt'); render(); }
+async function resetAll(pid) {
+  const p = playerById(pid);
+  const isAdmin = me() && me().admin;
+  if (pid !== S.me || isAdmin || !online()) {
+    // Admin, Gäste oder offline: Zahl zur Bestätigung abtippen
+    const n = String(100000 + Math.floor(Math.random() * 900000));
+    return modal(`<h2 class="bb">Alles löschen?</h2><p class="sm">Die komplette Statistik von <b>${esc(pName(p))}</b> wird zurückgesetzt. Zur Bestätigung diese Zahl eingeben:</p><div class="bb" style="font-size:44px;text-align:center;letter-spacing:6px;color:var(--or)">${n}</div><input id="rn" type="text" inputmode="numeric" placeholder="Zahl eingeben"><div style="height:10px"></div><button class="btn" id="rok" style="background:var(--bad)">Endgültig zurücksetzen</button>`, (m, close) => { $('#rok', m).onclick = () => { if ($('#rn', m).value.trim() !== n) return toast('Zahl stimmt nicht'); close(); doResetAll(pid); }; });
+  }
+  modal(`<h2 class="bb">Alles löschen?</h2><p class="sm">Zur Sicherheit braucht ein Komplett-Reset einen <b>Bestätigungscode vom Admin</b>.</p><ol class="sm" style="line-height:1.6"><li>Auf „Code anfordern“ tippen – der Admin bekommt den Code in seiner App und eine Mail von dir</li><li>Code vom Admin hier eingeben</li></ol><button class="btn sec" id="rq" style="margin-bottom:10px">📨 Code anfordern</button><input id="rc" type="text" inputmode="numeric" placeholder="6-stelliger Code vom Admin"><div style="height:10px"></div><button class="btn" id="rv" style="background:var(--bad)">Bestätigen & zurücksetzen</button>`, (m, close) => {
+    $('#rq', m).onclick = async () => {
+      const { error } = await sb.rpc('request_reset'); if (error) return toast('Fehler: ' + error.message, 3500);
+      const subj = encodeURIComponent('Dartsportz: Statistik-Reset angefragt'), body = encodeURIComponent(`Hallo Admin,\n\n${me().name} möchte die komplette Statistik zurücksetzen.\nBitte schick mir den Bestätigungscode aus der App (Account → Admin → Reset-Anfragen).\n\nDanke!`);
+      toast('Anfrage gesendet – Mail-App öffnet sich', 2500);
+      setTimeout(() => { location.href = `mailto:${ADMIN_MAIL}?subject=${subj}&body=${body}`; }, 600);
+    };
+    $('#rv', m).onclick = async () => { const c = $('#rc', m).value.trim(); if (!c) return; const { data } = await sb.rpc('verify_reset', { p_code: c }); if (!data) return toast('Code falsch oder abgelaufen', 3000); close(); doResetAll(pid); };
+  });
+}
 
 /* ================= PROFIL / SPIELER ================= */
 V.user = () => {

@@ -9,11 +9,17 @@ function cloudInit() {
   try { if (!window.supabase || !window.supabase.createClient) return; sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } }); } catch (e) { sb = null; return; }
   const q = new URLSearchParams(location.search); const inv = q.get('invite'); if (inv) { try { localStorage.setItem('dsz_invite', inv.toUpperCase()); } catch (e) {} }
   sb.auth.onAuthStateChange((ev, session) => {
+    if (ev === 'PASSWORD_RECOVERY') setTimeout(newPasswordModal, 300);
     const was = AUTH.user && AUTH.user.id; AUTH.user = session ? session.user : null;
     if (AUTH.user && AUTH.user.id !== was) setTimeout(onLogin, 0);
     if (!AUTH.user) { AUTH.profile = null; AUTH.friends = []; unsubscribeAll(); }
   });
   window.addEventListener('online', () => { flushQueue(); });
+}
+function newPasswordModal() {
+  modal(`<h2 class="bb">Neues Passwort</h2><p class="sm mut" style="text-align:center">Gib dein neues Passwort ein (mind. 8 Zeichen).</p><input id="np1" type="password" autocomplete="new-password" placeholder="Neues Passwort"><div style="height:8px"></div><input id="np2" type="password" autocomplete="new-password" placeholder="Wiederholen"><div style="height:10px"></div><button class="btn" id="npok">Passwort speichern</button>`, (m, close) => {
+    $('#npok', m).onclick = async () => { const a = $('#np1', m).value, b = $('#np2', m).value; if (a.length < 8) return toast('Mindestens 8 Zeichen'); if (a !== b) return toast('Passwörter stimmen nicht überein'); const { error } = await sb.auth.updateUser({ password: a }); if (error) return toast(error.message, 3500); close(); toast('✅ Passwort geändert'); try { history.replaceState(null, '', location.pathname); } catch (e) {} };
+  });
 }
 async function onLogin() {
   const uidv = AUTH.user.id;
@@ -250,7 +256,7 @@ V.account = () => {
       <div class="card">${mode === 'reg' ? `<div class="field"><label>Name</label><input id="an" type="text" value="${esc(me() ? me().name : '')}"></div>` : ''}
       <div class="field"><label>E-Mail</label><input id="ae" type="email" autocomplete="email"></div><div class="field"><label>Passwort</label><input id="ap" type="password" autocomplete="${mode === 'reg' ? 'new-password' : 'current-password'}"></div>
       ${mode === 'reg' ? `<div class="field"><label>Einladungscode (optional)</label><input id="ai" type="text" value="${esc(inv)}" placeholder="optional – macht euch direkt zu Freunden" style="text-transform:uppercase"></div>` : ''}
-      <button class="btn" id="ago">${mode === 'reg' ? 'Account erstellen' : 'Einloggen'}</button>${mode === 'login' ? '<button class="btn ghost" id="afg" style="margin-top:8px">Passwort vergessen</button>' : ''}</div>`,
+      <button class="btn" id="ago">${mode === 'reg' ? 'Account erstellen' : 'Einloggen'}</button>${mode === 'login' ? '<button class="btn ghost" id="afg" style="margin-top:8px">🔑 Passwort vergessen?</button>' : ''}</div>`,
       mount(r) {
         on(r, '[data-m]', 'click', b => go('account', { mode: b.dataset.m }));
         $('#ago', r).onclick = async () => {
@@ -266,7 +272,7 @@ V.account = () => {
           if (!data.session) modal(`<h2 class="bb">Fast geschafft!</h2><p>Bestätige deine E-Mail über den Link, den wir dir geschickt haben. Danach hier einloggen.</p><button class="btn" onclick="this.closest('.modal-bg').remove()">OK</button>`);
           else go('friends');
         };
-        $('#afg', r) && ($('#afg', r).onclick = async () => { const email = $('#ae', r).value.trim(); if (!email) return toast('E-Mail eingeben'); await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin }); toast('Link zum Zurücksetzen gesendet'); });
+        $('#afg', r) && ($('#afg', r).onclick = async () => { const email = $('#ae', r).value.trim(); if (!email) return toast('Bitte oben deine E-Mail eintragen'); const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/' }); if (error) return toast(error.message, 3500); modal(`<div style="text-align:center;font-size:48px">📧</div><h2 class="bb">Mail ist unterwegs</h2><p class="sm" style="text-align:center">Wir haben dir einen Link an <b>${esc(email)}</b> geschickt. Öffne ihn auf diesem Gerät – dann kannst du ein neues Passwort festlegen. Schau auch im Spam-Ordner nach.</p><button class="btn" onclick="this.closest('.modal-bg').remove()">OK</button>`); });
       }
     };
   }
@@ -277,16 +283,23 @@ V.account = () => {
       <div class="card"><b>Gast-Code einlösen</b><div class="mut sm">Hast du vorher als Gast gespielt? Code eingeben, um deine Spiele zu übernehmen.</div><div class="row" style="margin-top:8px"><input id="gc" type="text" placeholder="z. B. AB12CD" style="text-transform:uppercase"><button class="btn sm" id="gcok">OK</button></div></div>
       ${isA ? `<div class="lbl">Admin · Registrierung</div><div class="card"><div class="row"><div class="sp"><b>Nur mit Einladungscode</b><div class="mut xs">Aus: jeder mit dem App-Link kann sich registrieren.</div></div><button class="switch" id="ireq"></button></div></div>
       <div class="lbl">Admin · Einladungen</div><div class="card"><div class="row"><span class="sp sm">Gültig für</span><select id="iu" style="width:auto"><option value="1">1 Person</option><option value="5">5 Personen</option><option value="25" selected>25 Personen</option></select></div><button class="btn" id="inew" style="margin-top:10px">＋ Einladungslink erstellen</button><div id="ilist" class="list" style="margin-top:8px"></div></div>
+      <div class="lbl">Admin · Reset-Anfragen</div><div class="card list" id="rlist"><div class="mut sm">Lade…</div></div>
       <div class="lbl">Admin · Nutzer</div><div class="card list" id="ulist"><div class="mut sm">Lade…</div></div>` : ''}
-      <button class="btn ghost" id="alo" style="color:#f87171">Ausloggen</button>`,
+      <button class="btn sec" id="apw" style="margin-bottom:10px">🔑 Passwort ändern</button><button class="btn ghost" id="alo" style="color:#f87171">Ausloggen</button>`,
     mount(r) {
       $('#alo', r).onclick = async () => { await sb.auth.signOut(); go('home'); };
+      $('#apw', r).onclick = newPasswordModal;
       $('#gcok', r).onclick = () => redeemGuestClaim($('#gc', r).value);
       if (!isA) return;
       const link = c => `${location.origin}/?invite=${c}`;
       const loadInv = async () => { const { data } = await sb.from('invites').select('*').order('created_at', { ascending: false }).limit(10); $('#ilist', r).innerHTML = (data || []).map(i => `<div class="it"><div class="sp"><b class="bb" style="font-size:22px;letter-spacing:2px">${i.code}</b><div class="mut xs">${i.uses}/${i.max_uses} genutzt · bis ${new Date(i.expires_at).toLocaleDateString('de-DE')}</div></div><button class="btn sm sec" data-cp="${i.code}">Link kopieren</button><button class="btn sm sec" data-del="${i.code}">✕</button></div>`).join('') || '<div class="mut sm">Noch keine Einladungen</div>'; };
       const loadUsers = async () => { const { data } = await sb.from('profiles').select('id,name,role,banned,country,created_at').order('created_at'); $('#ulist', r).innerHTML = (data || []).map(u => `<div class="it"><div class="sp"><b>${esc(u.name)}</b> ${flag(u.country)}<div class="mut xs">${u.role === 'admin' ? 'Admin' : 'Nutzer'} · seit ${new Date(u.created_at).toLocaleDateString('de-DE')}</div></div>${u.id !== AUTH.user.id ? `<button class="btn sm ${u.banned ? '' : 'sec'}" data-ban="${u.id}" data-b="${u.banned ? 1 : 0}">${u.banned ? 'Entsperren' : 'Sperren'}</button>` : ''}</div>`).join(''); };
       loadInv(); loadUsers();
+      sb.from('reset_requests').select('code,created_at,used,user_id').eq('used', false).order('created_at', { ascending: false }).limit(20).then(async ({ data, error }) => {
+        if (error) { $('#rlist', r).innerHTML = '<div class="mut sm">Bitte migration_005.sql ausführen</div>'; return; }
+        const ids = [...new Set((data || []).map(x => x.user_id))]; const { data: pr } = ids.length ? await sb.from('profiles').select('id,name').in('id', ids) : { data: [] };
+        $('#rlist', r).innerHTML = (data || []).map(x => `<div class="it"><div class="sp"><b>${esc((pr.find(p => p.id === x.user_id) || {}).name || '?')}</b><div class="mut xs">${new Date(x.created_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</div></div><b class="bb" style="font-size:28px;letter-spacing:3px;color:var(--or)">${x.code}</b></div>`).join('') || '<div class="mut sm">Keine offenen Anfragen</div>';
+      });
       sb.from('app_settings').select('value').eq('key', 'inviteRequired').maybeSingle().then(({ data }) => { $('#ireq', r).classList.toggle('on', !!(data && data.value === true)); });
       $('#ireq', r).onclick = async () => { const nv = !$('#ireq', r).classList.contains('on'); const { error } = await sb.from('app_settings').upsert({ key: 'inviteRequired', value: nv, updated_at: new Date().toISOString() }); if (error) return toast(error.message, 3000); $('#ireq', r).classList.toggle('on', nv); toast(nv ? 'Registrierung nur mit Einladung' : 'Registrierung für alle offen'); };
       $('#inew', r).onclick = async () => { const { data, error } = await sb.from('invites').insert({ created_by: AUTH.user.id, max_uses: +$('#iu', r).value }).select().single(); if (error) return toast(error.message, 3000); await copyText(link(data.code)); loadInv(); };

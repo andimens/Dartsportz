@@ -120,11 +120,12 @@ function chooseBoard(sides, rematchOf) {
 }
 
 /* ================= STATISTIK ================= */
+function statHidden(pid, t) { const r = (S.statResets || {})[pid]; if (!r || !t) return false; if (r.all && t < r.all) return true; return (r.ranges || []).some(([a, b]) => t >= a && t < b); }
 function emptyStats() { return { darts: 0, pts: 0, f9d: 0, f9p: 0, att: 0, hit: 0, s180: 0, s140: 0, s100: 0, s60: 0, hiFin: 0, hiScore: 0, bestLeg: 0, legs: 0, legsWon: 0, matches: 0, wins: 0, losses: 0, dbl: {}, heat: {}, avgs: [] }; }
 function statsFor(pid, filter = () => true) {
   const t = emptyStats();
   for (const m of S.matches) {
-    if (m.mode !== 'x01' || !filter(m)) continue;
+    if (m.mode !== 'x01' || !filter(m) || statHidden(pid, m.created)) continue;
     const si = m.sides.findIndex(sd => sd.members.includes(pid)); if (si < 0) continue;
     let md = 0, mp = 0;
     for (const leg of m.legs) {
