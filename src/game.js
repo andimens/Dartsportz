@@ -193,7 +193,30 @@ function maybeBot() {
   };
   step(true);
 }
+function lastDartPid(m) {
+  if (m.cur.darts.length) return curPid(m);
+  for (let i = m.legs.length - 1; i >= 0; i--) { const vs = m.legs[i].visits; if (vs.length) return vs[vs.length - 1].pid; }
+  return null;
+}
+// Spielstand ohne den letzten Dart neu aufbauen (für Live-Spiele über Geräte hinweg)
+function replayWithout(m, k = 1) {
+  const seq = []; m.legs.forEach(l => l.visits.forEach(v => v.darts.forEach(d => seq.push(d)))); seq.push(...m.cur.darts);
+  seq.splice(Math.max(0, seq.length - k), k);
+  const n = createMatch({ sides: m.sides, settings: m.settings, boardId: m.boardId, starter: m.startSide, career: m.career });
+  ['id', 'created', 'live', 'liveId', 'hostUid', 'spin', '_v'].forEach(f => { if (m[f] !== undefined) n[f] = m[f]; });
+  seq.forEach(d => addDart(n, d.n, d.n === 0 ? 0 : d.m, d.x != null ? [d.x, d.y] : null));
+  return n;
+}
 function undo() {
+  if (G.m.live) {
+    if (G.m.finished) return;
+    const pid = lastDartPid(G.m); if (!pid) return toast('Nichts zum Rückgängigmachen');
+    if (!controlsCurrent(G.m, pid)) return toast(pName(playerById(pid)) + ' muss seinen Wurf zuerst zurücknehmen', 2600);
+    stopTimers(); if (G.clearT) { clearTimeout(G.clearT); G.clearT = null; }
+    const n = replayWithout(G.m, 1); S.active = n; G.m = n; G.hist = []; save();
+    renderGame(); redrawStuck(); vibrate(20); livePush(); maybeBot();
+    return;
+  }
   if (!G.hist.length) return toast('Nichts zum Rückgängigmachen');
   stopTimers();
   let snap = null;

@@ -192,9 +192,9 @@ function hostSpin() {
   save(true); livePush();
   spinWheel(m.sides, () => go('game', { fresh: true }), win, true);
 }
-function controlsCurrent(m) {
+function controlsCurrent(m, pid) {
   if (!m.live) return true;
-  const pid = curPid(m); const p = playerById(pid);
+  pid = pid || curPid(m); const p = playerById(pid);
   if (String(pid).startsWith('bot:')) return m.hostUid === AUTH.user?.id;
   if (p && p.uid) return AUTH.user && (p.uid === AUTH.user.id || (S.aliases && S.aliases[pid] === S.me));
   return m.hostUid === (AUTH.user && AUTH.user.id); // Gäste steuert der Host
