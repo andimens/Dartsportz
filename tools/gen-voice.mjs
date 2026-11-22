@@ -5,11 +5,18 @@ const [lang, voiceId, model = 'eleven_multilingual_v2'] = process.argv.slice(2);
 const KEY = process.env.ELEVENLABS_API_KEY;
 if (!KEY || !voiceId || !['de', 'en'].includes(lang)) { console.error('Nutzung: node tools/gen-voice.mjs de|en VOICE_ID'); process.exit(1); }
 
-const de = n => n === 180 ? 'HUNDERTACHTZIIIG!' : n === 0 ? 'Kein Score!' : n >= 100 ? `${n}!` : `${n}`;
-const en = n => n === 180 ? 'ONE HUNDRED AND EIGHTYYY!' : n === 0 ? 'No score!' : n >= 100 ? `${n}!` : `${n}`;
+const E = ['null','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun','zehn','elf','zwölf','dreizehn','vierzehn','fünfzehn','sechzehn','siebzehn','achtzehn','neunzehn'];
+const Z = ['','','zwanzig','dreißig','vierzig','fünfzig','sechzig','siebzig','achtzig','neunzig'];
+function deWord(n) { if (n >= 100) return 'hundert' + (n % 100 ? deWord(n % 100) : ''); if (n < 20) return E[n]; const e = n % 10, z = Math.floor(n / 10); return e ? (e === 1 ? 'ein' : E[e]) + 'und' + Z[z] : Z[z]; }
+const EO = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+const ET = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+function enWord(n) { if (n >= 100) return 'one hundred' + (n % 100 ? ' and ' + enWord(n % 100) : ''); if (n < 20) return EO[n]; const e = n % 10, z = Math.floor(n / 10); return ET[z] + (e ? '-' + EO[e] : ''); }
+const cap = s => s[0].toUpperCase() + s.slice(1);
+const de = n => n === 180 ? 'HUNDERTACHTZIIIG!' : n === 0 ? 'Kein Score!' : cap(deWord(n)) + (n >= 100 ? '!' : '.');
+const en = n => n === 180 ? 'ONE HUNDRED AND EIGHTYYY!' : n === 0 ? 'No score!' : cap(enWord(n)) + (n >= 100 ? '!' : '.');
 const T = {};
 for (let n = 0; n <= 180; n++) T['s_' + n] = lang === 'de' ? de(n) : en(n);
-for (let n = 2; n <= 170; n++) T['r_' + n] = `${n}.`;
+for (let n = 2; n <= 170; n++) T['r_' + n] = cap(lang === 'de' ? deWord(n) : enWord(n)) + '.';
 Object.assign(T, lang === 'de'
   ? { bust: 'Überworfen!', gameshot: 'Game Shot – und das Leg!', gameshot_match: 'Game Shot – und das MATCH!', require: 'Du brauchst …', gameon: 'Game on!' }
   : { bust: 'No score!', gameshot: 'Game shot, and the leg!', gameshot_match: 'Game shot, and the MATCH!', require: 'You require …', gameon: 'Game on!' });
