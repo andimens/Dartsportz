@@ -15,7 +15,7 @@ html=f'''<!DOCTYPE html>
 <script>{js}</script></body></html>'''
 (out/'index.html').write_text(html)
 (out/'manifest.json').write_text(json.dumps({"name":"Dartsportz","short_name":"Dartsportz","start_url":"./","display":"standalone","background_color":"#0f0f10","theme_color":"#0f0f10","orientation":"portrait","icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]},indent=1))
-(out/'sw.js').write_text('''const C='dartsportz-v6';const A=['./','index.html','manifest.json','icon-192.png','icon-512.png'];
+(out/'sw.js').write_text('''const C='dartsportz-v7';const A=['./','index.html','manifest.json','icon-192.png','icon-512.png'];
 const X=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js','https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;800&display=swap'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(A).then(()=>Promise.all(X.map(u=>fetch(u,{mode:'no-cors'}).then(r=>c.put(u,r)).catch(()=>{}))))));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))));self.clients.claim()});
