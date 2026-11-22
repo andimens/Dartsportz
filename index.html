@@ -466,9 +466,12 @@ function callout(kind, n, name, opts = {}) {
   if (S.settings.voiceEngine === 'pro' && man) {
     const nk = callKeyOf(name);
     const hasN = nk && man.keys.includes(nk);
-    const keys = kind === 'total' ? (man.keys.includes('totalis') ? ['totalis', 's_' + n] : ['s_' + n]) : kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? (hasN ? ['gameshot', nk] : ['gameshot']) : kind === 'match' ? (hasN ? ['gameshot_match', nk] : ['gameshot_match']) : kind === 'first' ? (hasN ? [nk, 'begins', 'gameon'] : ['gameon']) : kind === 'require' ? (hasN ? [nk, 'require', 'r_' + n] : ['require', 'r_' + n]) : [];
+    const nKey = x => x >= 2 && x <= 170 ? 'r_' + x : 's_' + x;
+    const dartKeys = () => { const mm = name; if (n === 25) return [mm === 2 ? 'bull' : 'outer']; if (mm === 3 && n === 20 && man.keys.includes('t20')) return ['t20']; if (mm === 3) return ['pre_t', nKey(n)]; if (mm === 2) return ['pre_d', nKey(n)]; return [nKey(n)]; };
+    const keys = kind === 'dart' ? dartKeys() : kind === 'total' ? (man.keys.includes('totalis') ? ['totalis', 's_' + n] : ['s_' + n]) : kind === 'score' ? ['s_' + n] : kind === 'bust' ? ['bust'] : kind === 'game' ? (hasN ? ['gameshot', nk] : ['gameshot']) : kind === 'match' ? (hasN ? ['gameshot_match', nk] : ['gameshot_match']) : kind === 'first' ? (hasN ? [nk, 'begins', 'gameon'] : ['gameon']) : kind === 'require' ? (hasN ? [nk, 'require', 'r_' + n] : ['require', 'r_' + n]) : [];
     if (keys.every(k => man.keys.includes(k))) return proPlay(lang, keys, opts);
   }
+  if (kind === 'dart') { const de = lang !== 'en'; const mm = name; const t = n === 25 ? (mm === 2 ? 'Bullseye' : (de ? 'Außen 25' : 'Outer 25')) : (mm === 3 ? (de ? 'Dreifach ' : 'Triple ') : mm === 2 ? (de ? 'Zweifach ' : 'Double ') : '') + n; return say(t, null, opts); }
   if (name && typeof name === 'object') name = pName(name);
   const t = kind === 'total' ? (n === 0 ? CALL.score(0) : 'Total is ' + n) : kind === 'score' ? CALL.score(n) : kind === 'bust' ? CALL.bust() : kind === 'game' ? CALL.game(name || '') : kind === 'match' ? CALL.match(name || '') : kind === 'first' ? CALL.first(name || '') : kind === 'require' ? CALL.require(name || '', n) : '';
   if (t) say(t, null, opts);
@@ -1194,7 +1197,7 @@ function throwDart(n, mu, pt, human, silent) {
   const bid = m.boardId;
   if (!silent) setTimeout(() => impact(bid, n === 0), ms);
   const res = addDart(m, n, mu, pt);
-  if (S.settings.callEach && !silent && n > 0) callout('score', n * mu);
+  if (S.settings.callEach && !silent && n > 0) callout('dart', n, mu);
   if (human) G.mult = 1;
   renderGame(); save(); livePush();
   if (res.ended) afterVisit(res, side);
@@ -1517,7 +1520,7 @@ function pThrow(n, mu, silent) {
   const pt = pointFor(n, mu), pid = P.players[P.cur];
   if (!silent) { const ms = animateThrow(pt, pid, P.darts, P.boardId, dLabelFull(n, mu), $('#bin'), PG.stuck); setTimeout(() => impact(P.boardId, n === 0), ms); }
   const res = g.dart(P, n, mu) || {};
-  if (S.settings.callEach && !silent && n > 0) callout('score', n * mu);
+  if (S.settings.callEach && !silent && n > 0) callout('dart', n, mu);
   P.darts.push({ n, m: mu, x: +pt[0].toFixed(1), y: +pt[1].toFixed(1) });
   PG.mult = 1;
   if (res.msg) { toast(res.msg, 1600); say(res.msg.replace(/[^\p{L}\p{N} !]/gu, '')); }
@@ -1774,7 +1777,7 @@ function applyRemote(row) {
     let d = null, vend = null;
     if (nm.cur.darts.length) d = nm.cur.darts[nm.cur.darts.length - 1];
     else { const leg = [...nm.legs].reverse().find(l => l.visits.length); if (leg) { vend = leg.visits[leg.visits.length - 1]; d = vend.darts[vend.darts.length - 1]; } }
-    if (d && S.settings.callEach && d.n > 0) callout('score', d.n * d.m);
+    if (d && S.settings.callEach && d.n > 0) callout('dart', d.n, d.m);
     if (d) { const ms = animateThrow(d.x != null ? [d.x, d.y] : pointFor(d.n, d.m), vend ? vend.pid : curPid(nm), nm.cur.darts.slice(0, -1), nm.boardId, dLabelFull(d.n, d.m), $('#bin'), G.stuck); setTimeout(() => impact(nm.boardId, d.n === 0), ms); }
     if (vend) { callout(vend.bust ? 'bust' : S.settings.callEach ? 'total' : 'score', vend.scored); G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100); }
     renderGame();

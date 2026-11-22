@@ -182,7 +182,7 @@ function pThrow(n, mu, silent) {
   const pt = pointFor(n, mu), pid = P.players[P.cur];
   if (!silent) { const ms = animateThrow(pt, pid, P.darts, P.boardId, dLabelFull(n, mu), $('#bin'), PG.stuck); setTimeout(() => impact(P.boardId, n === 0), ms); }
   const res = g.dart(P, n, mu) || {};
-  if (S.settings.callEach && !silent && n > 0) callout('score', n * mu);
+  if (S.settings.callEach && !silent && n > 0) callout('dart', n, mu);
   P.darts.push({ n, m: mu, x: +pt[0].toFixed(1), y: +pt[1].toFixed(1) });
   PG.mult = 1;
   if (res.msg) { toast(res.msg, 1600); say(res.msg.replace(/[^\p{L}\p{N} !]/gu, '')); }
