@@ -201,12 +201,11 @@ async function uploadGuestClaim(p) {
   toast(error ? 'Fehler: ' + error.message : 'Code aktiviert: ' + p.linkCode, 2600);
 }
 async function redeemGuestClaim(code) {
-  const { data, error } = await sb.from('guest_claims').select('*').eq('code', code.trim().toUpperCase()).maybeSingle();
-  if (error || !data) return toast('Code nicht gefunden');
-  if (data.claimed_by && data.claimed_by !== AUTH.user.id) return toast('Code wurde schon eingelöst');
+  if (!code || !code.trim()) return;
+  const { data, error } = await sb.rpc('claim_guest', { p_code: code.trim().toUpperCase() });
+  if (error || !data) return toast('Code nicht gefunden oder schon eingelöst');
   const gid = data.guest.id; let n = 0;
   (data.matches || []).forEach(m => { if (S.matches.some(x => x.id === m.id)) return; const s = JSON.stringify(m).split('"' + gid + '"').join('"' + S.me + '"'); S.matches.push(JSON.parse(s)); n++; });
-  await sb.from('guest_claims').update({ claimed_by: AUTH.user.id }).eq('code', data.code);
   save(true); toast(`✅ ${n} Spiele übernommen`, 2600);
 }
 
@@ -227,7 +226,7 @@ V.account = () => {
       mount(r) {
         on(r, '[data-m]', 'click', b => go('account', { mode: b.dataset.m }));
         $('#ago', r).onclick = async () => {
-          const email = $('#ae', r).value.trim(), pw = $('#ap', r).value; if (!email || pw.length < 6) return toast('E-Mail und Passwort (mind. 6 Zeichen)');
+          const email = $('#ae', r).value.trim(), pw = $('#ap', r).value; if (!email || pw.length < (mode === 'reg' ? 8 : 6)) return toast(mode === 'reg' ? 'Passwort: mindestens 8 Zeichen' : 'E-Mail und Passwort eingeben');
           const btn = $('#ago', r); btn.textContent = '…';
           if (mode === 'login') { const { error } = await sb.auth.signInWithPassword({ email, password: pw }); if (error) { btn.textContent = 'Einloggen'; return toast(error.message.includes('Invalid') ? 'E-Mail oder Passwort falsch' : error.message, 3000); } go('friends'); return; }
           const code = $('#ai', r).value.trim().toUpperCase();
