@@ -4,10 +4,11 @@ const ICONS = {
   play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>',
   career: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l3 2 4-6 4 6 3-2-1.5 9h-11z" fill="currentColor"/><path d="M6 21h12"/></svg>',
   train: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>',
+  friends: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><circle cx="9" cy="10.5" r=".6" fill="currentColor"/><circle cx="12.5" cy="10.5" r=".6" fill="currentColor"/><circle cx="16" cy="10.5" r=".6" fill="currentColor"/></svg>',
   stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 15l3-3 3 2 4-5"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/></svg>',
 };
-const NAV = [['home', 'Start'], ['play', 'Spielen'], ['career', 'Karriere'], ['train', 'Training'], ['stats', 'Statistik'], ['user', 'Profil']];
+const NAV = [['home', 'Start'], ['play', 'Spielen'], ['career', 'Karriere'], ['friends', 'Freunde'], ['stats', 'Statistik'], ['user', 'Profil']];
 const V = {};
 let route = { name: 'home', p: {} };
 function go(name, p = {}) { route = { name, p }; render(); window.scrollTo(0, 0); }
@@ -24,6 +25,7 @@ function render() {
     const tab = v.tab || route.name;
     nav.innerHTML = '<div class="in">' + NAV.map(([k, l]) => `<button data-nav="${k}" class="${tab === k ? 'on' : ''}">${ICONS[k]}<span>${l}</span></button>`).join('') + '</div>';
     nav.onclick = e => { const b = e.target.closest('[data-nav]'); if (b) { vibrate(); go(b.dataset.nav); } };
+    if (typeof updateBadge === 'function') updateBadge();
   } else if (nav) nav.remove();
   v.mount && v.mount(app);
 }
@@ -57,7 +59,7 @@ V.home = () => {
     html: `<div class="row card" style="background:none;padding:6px 2px" data-go="user">${avatar(p)}<div class="sp"><div style="font-size:22px;font-weight:800">${esc(p.name)} <span class="flag">${flag(p.country)}</span></div><div class="row" style="gap:6px"><span class="bb" style="font-size:30px;color:var(--or)">${fmt(st.avg)}</span><span class="mut sm">Ø 3-Dart · ${st.matches} Spiele</span></div></div>${p.admin ? '<span class="badge or">ADMIN</span>' : ''}</div>
     ${S.active ? `<button class="card row" style="width:100%;border:1px solid var(--or)" data-resume><span style="font-size:26px">⏯</span><div class="sp" style="text-align:left"><b>Spiel fortsetzen</b><div class="mut sm">${esc(S.active.sides.map(s => s.name).join(' vs '))}</div></div><span class="mut">›</span></button>` : ''}
     <div class="grid2"><button class="tile t-or" data-go="play"><span class="em">🎯</span><h3 class="bb">LOKAL<br>SPIELEN</h3><p>Allein, mit Freunden, Teams oder gegen den Bot</p></button>
-    <button class="tile t-or2" data-online><span class="em">🌍</span><h3 class="bb">ONLINE<br>SPIELEN</h3><p>Live-Sync mit Freunden – kommt in Schritt 2</p></button></div>
+    <button class="tile t-or2" data-go="friends"><span class="em">🌍</span><h3 class="bb">ONLINE<br>SPIELEN</h3><p>${AUTH.user ? AUTH.friends.length + ' Freunde · Live-Sync & Chat' : 'Login, Freunde, Live-Sync & Chat'}</p></button></div>
     ${S.pactive ? `<button class="card row" style="width:100%;border:1px solid var(--or)" data-presume><span style="font-size:26px">⏯</span><div class="sp" style="text-align:left"><b>${PARTY[S.pactive.mode].name} fortsetzen</b><div class="mut sm">${esc(S.pactive.players.map(id => pName(playerById(id))).join(', '))}</div></div><span class="mut">›</span></button>` : ''}
     <button class="tile t-gr" style="width:100%;margin-bottom:12px;min-height:100px;background:linear-gradient(135deg,#5b2a86,#2a1640)" data-go="partylist"><span class="em">🎉</span><h3 class="bb">CRICKET & PARTYSPIELE</h3><p>Cricket, Killer, Highscore, Shanghai</p></button>
     <button class="tile t-dk" style="width:100%;margin-bottom:12px" data-go="career"><span class="em">🏆</span><h3 class="bb">KARRIERE</h3><p>${esc(ch.name)} · Level ${L}/30 – nächster Gegner: ${esc(botDef(L).name)}</p></button>
@@ -121,7 +123,10 @@ V.play = () => {
       on(r, '[data-tadd]', 'click', b => { const t = S.teams.find(x => x.id === b.dataset.tadd); const used = su.teams.flatMap(id => S.teams.find(x => x.id === id).members); addPlayerModal(used, id => { t.members.push(id); save(); render(); }); });
       on(r, '[data-start]', 'click', () => {
         const sides = buildSides(su); if (!sides) return;
-        whoStarts(sides, starter => launchMatch(sides, { ...st, start: st.start === 'custom' ? st.custom : st.start }, starter));
+        const stt = { ...st, start: st.start === 'custom' ? st.custom : st.start };
+        const remote = online() && sides.some(sd => sd.members.some(id => { const pp = playerById(id); return pp && pp.uid && pp.uid !== AUTH.user.id; }));
+        if (remote) return modal(`<h2 class="bb">Wie spielt ihr?</h2><button class="btn" id="lv" style="margin-bottom:10px">📡 Live auf mehreren Handys</button><button class="btn sec" id="lc">📱 Alle auf diesem Handy</button>`, (m, close) => { $('#lv', m).onclick = () => { close(); whoStarts(sides, s0 => startLiveMatch(sides, stt, s0)); }; $('#lc', m).onclick = () => { close(); whoStarts(sides, s0 => launchMatch(sides, stt, s0)); }; });
+        whoStarts(sides, starter => launchMatch(sides, stt, starter));
       });
     }
   };
@@ -138,7 +143,7 @@ function buildSides(su, quiet) {
   return sides;
 }
 function addPlayerModal(exclude, cb) {
-  const avail = S.players.filter(p => !exclude.includes(p.id));
+  const avail = S.players.filter(p => !exclude.includes(p.id) && !p.remote);
   modal(`<h2 class="bb">Spieler hinzufügen</h2><div class="list">${avail.map(p => `<button class="it" style="width:100%" data-pid="${p.id}">${avatar(p, 's')}<b class="sp" style="text-align:left">${esc(p.name)} ${p.nick ? `<span class="mut">„${esc(p.nick)}“</span>` : ''}</b><span class="mut sm">${p.guest ? 'Gast' : 'Profil'}</span></button>`).join('') || '<div class="mut sm">Keine gespeicherten Spieler.</div>'}</div>
     <div class="lbl">Neuer Gast</div><div class="row"><input id="ng" type="text" placeholder="Name"><button class="btn sm" id="ngok">＋</button></div>`, (m, close) => {
     on(m, '[data-pid]', 'click', b => { close(); cb(b.dataset.pid); });

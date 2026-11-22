@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Dartsportz">
 <link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png"><link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>:root{
   --bg:#0f0f10; --bg2:#18181a; --card:#222225; --card2:#2c2c30; --line:#38383d;
   --txt:#f4f4f5; --mut:#a1a1aa; --dim:#71717a;
@@ -184,6 +185,8 @@ input[type=color]{width:44px;height:36px;border:0;border-radius:10px;background:
 .pside .sub{font-size:11.5px;opacity:.9}
 .lives{letter-spacing:1px;font-size:13px}
 .chat-msg{max-width:80%;padding:9px 12px;border-radius:16px;margin:4px 0;background:var(--card2)}
+
+.nb{position:absolute;top:0;right:8px;min-width:18px;height:18px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;font-style:normal;font-weight:800;display:none;place-items:center;padding:0 4px}
 </style></head><body><div id="app"></div>
 <script>'use strict';
 /* ================= STORE ================= */
@@ -727,10 +730,11 @@ const ICONS = {
   play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>',
   career: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l3 2 4-6 4 6 3-2-1.5 9h-11z" fill="currentColor"/><path d="M6 21h12"/></svg>',
   train: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>',
+  friends: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><circle cx="9" cy="10.5" r=".6" fill="currentColor"/><circle cx="12.5" cy="10.5" r=".6" fill="currentColor"/><circle cx="16" cy="10.5" r=".6" fill="currentColor"/></svg>',
   stats: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 15l3-3 3 2 4-5"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/></svg>',
 };
-const NAV = [['home', 'Start'], ['play', 'Spielen'], ['career', 'Karriere'], ['train', 'Training'], ['stats', 'Statistik'], ['user', 'Profil']];
+const NAV = [['home', 'Start'], ['play', 'Spielen'], ['career', 'Karriere'], ['friends', 'Freunde'], ['stats', 'Statistik'], ['user', 'Profil']];
 const V = {};
 let route = { name: 'home', p: {} };
 function go(name, p = {}) { route = { name, p }; render(); window.scrollTo(0, 0); }
@@ -747,6 +751,7 @@ function render() {
     const tab = v.tab || route.name;
     nav.innerHTML = '<div class="in">' + NAV.map(([k, l]) => `<button data-nav="${k}" class="${tab === k ? 'on' : ''}">${ICONS[k]}<span>${l}</span></button>`).join('') + '</div>';
     nav.onclick = e => { const b = e.target.closest('[data-nav]'); if (b) { vibrate(); go(b.dataset.nav); } };
+    if (typeof updateBadge === 'function') updateBadge();
   } else if (nav) nav.remove();
   v.mount && v.mount(app);
 }
@@ -780,7 +785,7 @@ V.home = () => {
     html: `<div class="row card" style="background:none;padding:6px 2px" data-go="user">${avatar(p)}<div class="sp"><div style="font-size:22px;font-weight:800">${esc(p.name)} <span class="flag">${flag(p.country)}</span></div><div class="row" style="gap:6px"><span class="bb" style="font-size:30px;color:var(--or)">${fmt(st.avg)}</span><span class="mut sm">Ø 3-Dart · ${st.matches} Spiele</span></div></div>${p.admin ? '<span class="badge or">ADMIN</span>' : ''}</div>
     ${S.active ? `<button class="card row" style="width:100%;border:1px solid var(--or)" data-resume><span style="font-size:26px">⏯</span><div class="sp" style="text-align:left"><b>Spiel fortsetzen</b><div class="mut sm">${esc(S.active.sides.map(s => s.name).join(' vs '))}</div></div><span class="mut">›</span></button>` : ''}
     <div class="grid2"><button class="tile t-or" data-go="play"><span class="em">🎯</span><h3 class="bb">LOKAL<br>SPIELEN</h3><p>Allein, mit Freunden, Teams oder gegen den Bot</p></button>
-    <button class="tile t-or2" data-online><span class="em">🌍</span><h3 class="bb">ONLINE<br>SPIELEN</h3><p>Live-Sync mit Freunden – kommt in Schritt 2</p></button></div>
+    <button class="tile t-or2" data-go="friends"><span class="em">🌍</span><h3 class="bb">ONLINE<br>SPIELEN</h3><p>${AUTH.user ? AUTH.friends.length + ' Freunde · Live-Sync & Chat' : 'Login, Freunde, Live-Sync & Chat'}</p></button></div>
     ${S.pactive ? `<button class="card row" style="width:100%;border:1px solid var(--or)" data-presume><span style="font-size:26px">⏯</span><div class="sp" style="text-align:left"><b>${PARTY[S.pactive.mode].name} fortsetzen</b><div class="mut sm">${esc(S.pactive.players.map(id => pName(playerById(id))).join(', '))}</div></div><span class="mut">›</span></button>` : ''}
     <button class="tile t-gr" style="width:100%;margin-bottom:12px;min-height:100px;background:linear-gradient(135deg,#5b2a86,#2a1640)" data-go="partylist"><span class="em">🎉</span><h3 class="bb">CRICKET & PARTYSPIELE</h3><p>Cricket, Killer, Highscore, Shanghai</p></button>
     <button class="tile t-dk" style="width:100%;margin-bottom:12px" data-go="career"><span class="em">🏆</span><h3 class="bb">KARRIERE</h3><p>${esc(ch.name)} · Level ${L}/30 – nächster Gegner: ${esc(botDef(L).name)}</p></button>
@@ -844,7 +849,10 @@ V.play = () => {
       on(r, '[data-tadd]', 'click', b => { const t = S.teams.find(x => x.id === b.dataset.tadd); const used = su.teams.flatMap(id => S.teams.find(x => x.id === id).members); addPlayerModal(used, id => { t.members.push(id); save(); render(); }); });
       on(r, '[data-start]', 'click', () => {
         const sides = buildSides(su); if (!sides) return;
-        whoStarts(sides, starter => launchMatch(sides, { ...st, start: st.start === 'custom' ? st.custom : st.start }, starter));
+        const stt = { ...st, start: st.start === 'custom' ? st.custom : st.start };
+        const remote = online() && sides.some(sd => sd.members.some(id => { const pp = playerById(id); return pp && pp.uid && pp.uid !== AUTH.user.id; }));
+        if (remote) return modal(`<h2 class="bb">Wie spielt ihr?</h2><button class="btn" id="lv" style="margin-bottom:10px">📡 Live auf mehreren Handys</button><button class="btn sec" id="lc">📱 Alle auf diesem Handy</button>`, (m, close) => { $('#lv', m).onclick = () => { close(); whoStarts(sides, s0 => startLiveMatch(sides, stt, s0)); }; $('#lc', m).onclick = () => { close(); whoStarts(sides, s0 => launchMatch(sides, stt, s0)); }; });
+        whoStarts(sides, starter => launchMatch(sides, stt, starter));
       });
     }
   };
@@ -861,7 +869,7 @@ function buildSides(su, quiet) {
   return sides;
 }
 function addPlayerModal(exclude, cb) {
-  const avail = S.players.filter(p => !exclude.includes(p.id));
+  const avail = S.players.filter(p => !exclude.includes(p.id) && !p.remote);
   modal(`<h2 class="bb">Spieler hinzufügen</h2><div class="list">${avail.map(p => `<button class="it" style="width:100%" data-pid="${p.id}">${avatar(p, 's')}<b class="sp" style="text-align:left">${esc(p.name)} ${p.nick ? `<span class="mut">„${esc(p.nick)}“</span>` : ''}</b><span class="mut sm">${p.guest ? 'Gast' : 'Profil'}</span></button>`).join('') || '<div class="mut sm">Keine gespeicherten Spieler.</div>'}</div>
     <div class="lbl">Neuer Gast</div><div class="row"><input id="ng" type="text" placeholder="Name"><button class="btn sm" id="ngok">＋</button></div>`, (m, close) => {
     on(m, '[data-pid]', 'click', b => { close(); cb(b.dataset.pid); });
@@ -966,13 +974,13 @@ V.game = (p) => {
     <div class="brow"><button id="gu">↶</button><button class="miss" id="gm">FALSCH</button><button id="grules">?</button></div></div></div>`,
     mount(r) {
       sizeBoard(); renderGame();
-      const press = (n, mu) => { if (G.busy || isBotTurn()) return; vibrate(8); throwDart(n, mu, null, true); };
+      const press = (n, mu) => { if (G.busy || isBotTurn()) return; if (!controlsCurrent(G.m)) return toast('Warte auf ' + pName(playerById(curPid(G.m))) + ' …'); vibrate(8); throwDart(n, mu, null, true); };
       on(r, '[data-n]', 'click', b => press(+b.dataset.n, G.mult));
       on(r, '[data-b]', 'click', b => press(25, b.dataset.b === '50' ? 2 : 1));
       on(r, '[data-mu]', 'click', b => { G.mult = +b.dataset.mu; renderMult(); });
       $('#gm').onclick = () => press(0, 0);
       $('#gu').onclick = undo;
-      $('#vsub').onclick = () => { if (isBotTurn() || G.busy || G.m.finished) return; let r0, k = 0; do { r0 = throwDart(0, 0, null, true, true); } while (r0 && !r0.ended && ++k < 3); };
+      $('#vsub').onclick = () => { if (isBotTurn() || G.busy || G.m.finished || !controlsCurrent(G.m)) return; let r0, k = 0; do { r0 = throwDart(0, 0, null, true, true); } while (r0 && !r0.ended && ++k < 3); };
       $('#grules').onclick = () => showRules('x01');
       $('#gx').onclick = () => { stopTimers(); save(true); go('home'); };
       $('#gst').onclick = liveStats;
@@ -1014,7 +1022,7 @@ function renderGame() {
       ${co ? `<div class="co">${co.map(dLabel).join(' · ')}</div>` : ''}</div>`;
   }).join('');
   const sd = m.sides[c.side], pp = playerById(curPid(m));
-  $('#who').innerHTML = m.finished ? 'SPIEL BEENDET' : `${esc(pName(pp)).toUpperCase()} IST AM ZUG!${sd.bot ? ' <span class="pulse">🤖</span>' : ''}`;
+  $('#who').innerHTML = m.finished ? 'SPIEL BEENDET' : `${esc(pName(pp)).toUpperCase()} IST AM ZUG!${sd.bot ? ' <span class="pulse">🤖</span>' : ''}${m.live ? (controlsCurrent(m) ? ' <span style="font-size:14px;color:var(--ok)">● LIVE</span>' : ' <span class="pulse" style="font-size:14px">📡 wirft gerade</span>') : ''}`;
   for (let i = 0; i < 3; i++) $('#v' + i).innerHTML = dartBox(c.darts[i]);
   $('#vt').textContent = visitSoFar(m);
   renderMult();
@@ -1070,7 +1078,7 @@ function throwDart(n, mu, pt, human, silent) {
   if (!silent) setTimeout(() => impact(bid, n === 0), ms);
   const res = addDart(m, n, mu, pt);
   if (human) G.mult = 1;
-  renderGame(); save();
+  renderGame(); save(); livePush();
   if (res.ended) afterVisit(res, side);
   return res;
 }
@@ -1113,6 +1121,7 @@ function botSays(L, ev) {
 function introBubble() { const bot = G.m.sides.find(s => s.bot); if (bot) setTimeout(() => botSays(bot.bot.level, 'intro'), 900); }
 function maybeBot() {
   if (!G || !isBotTurn() || G.busy) return;
+  if (G.m.live && !controlsCurrent(G.m)) return;
   G.busy = true; const m = G.m, side = m.cur.side, L = m.sides[side].bot.level;
   const step = (first) => {
     G.timers.push(setTimeout(() => {
@@ -1136,12 +1145,15 @@ function undo() {
   if (!snap.human && !G.hist.length) { /* nur Bot-Würfe */ }
   const restored = JSON.parse(snap.s); S.active = restored; G.m = restored; save();
   if (G.clearT) { clearTimeout(G.clearT); G.clearT = null; }
-  renderGame(); redrawStuck(); vibrate(20);
+  renderGame(); redrawStuck(); vibrate(20); livePush();
   if (!snap.human) maybeBot();
 }
 function finishMatch() {
-  const m = G.m; stopTimers();
-  S.matches.push(m); S.active = null;
+  let m = G.m; stopTimers();
+  if (m.live && S.aliases) { let js = JSON.stringify(m); Object.entries(S.aliases).forEach(([a, b]) => { js = js.split('"' + a + '"').join('"' + b + '"'); }); m = G.m = JSON.parse(js); }
+  if (!S.matches.some(x => x.id === m.id)) S.matches.push(m); S.active = null;
+  if (!m.live || m.hostUid === (AUTH.user && AUTH.user.id)) queueMatch(m);
+  if (m.live) { livePush(); LIVE.id = null; }
   let careerMsg = '';
   if (m.career) {
     const L = m.career, won = !m.sides[m.winner].bot;
@@ -1384,7 +1396,7 @@ function pNext() {
 function pFinish() {
   const P = PG.P, g = PARTY[P.mode]; if (P.finished) return;
   P.finished = true; P.winner = g.over(P); P.ended = Date.now();
-  S.party = S.party || []; S.party.push(P); S.pactive = null; save(true); chime(true);
+  S.party = S.party || []; S.party.push(P); S.pactive = null; save(true); chime(true); queueMatch(P);
   const w = playerById(P.players[P.winner]);
   say(S.settings.caller === 'en' ? `Game shot! ${pName(w)} wins!` : `${pName(w)} gewinnt!`);
   setTimeout(() => modal(`<div style="text-align:center;font-size:56px">🏆</div><h2 class="bb">${esc(pName(w))} gewinnt!</h2><p class="mut" style="text-align:center">${g.name}</p><div class="grid2"><button class="btn sec" id="pd">Fertig</button><button class="btn" id="pr">Nochmal</button></div>`, (m, close) => {
@@ -1396,6 +1408,316 @@ function pUndo() {
   if (!PG.hist.length) return toast('Nichts zum Rückgängigmachen');
   const P = JSON.parse(PG.hist.pop()); S.pactive = P; PG.P = P; save();
   prender(); pRedraw(); vibrate(20);
+}
+
+/* ================= ONLINE (Supabase) ================= */
+const SB_URL = 'https://vsreutpxuwckyvycelwt.supabase.co';
+const SB_KEY = 'sb_publishable_QxtipKYdcDu-Bo4hrC7nIg_TKjmYI1y';
+let sb = null;
+const AUTH = { user: null, profile: null, friends: [], unread: {}, ready: false };
+const online = () => !!(sb && AUTH.user && navigator.onLine !== false);
+function cloudInit() {
+  try { if (!window.supabase || !window.supabase.createClient) return; sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } }); } catch (e) { sb = null; return; }
+  const q = new URLSearchParams(location.search); const inv = q.get('invite'); if (inv) { try { localStorage.setItem('dsz_invite', inv.toUpperCase()); } catch (e) {} }
+  sb.auth.onAuthStateChange((ev, session) => {
+    const was = AUTH.user && AUTH.user.id; AUTH.user = session ? session.user : null;
+    if (AUTH.user && AUTH.user.id !== was) setTimeout(onLogin, 0);
+    if (!AUTH.user) { AUTH.profile = null; AUTH.friends = []; unsubscribeAll(); }
+  });
+  window.addEventListener('online', () => { flushQueue(); });
+}
+async function onLogin() {
+  const uidv = AUTH.user.id;
+  const { data: prof } = await sb.from('profiles').select('*').eq('id', uidv).maybeSingle();
+  if (prof && prof.banned) { await sb.auth.signOut(); toast('Dein Zugang wurde gesperrt.'); return; }
+  AUTH.profile = prof;
+  // Einladung einlösen (falls Registrierung mit Code)
+  let inv = null; try { inv = localStorage.getItem('dsz_invite'); } catch (e) {}
+  if (inv) { await sb.rpc('redeem_invite', { p_code: inv }); try { localStorage.removeItem('dsz_invite'); } catch (e) {} }
+  // lokales Profil verknüpfen
+  let mp = me();
+  if (!mp) { mp = newPlayer({ name: prof ? prof.name : 'Spieler', guest: false }); S.me = mp.id; }
+  mp.uid = uidv; mp.guest = false; mp.admin = prof && prof.role === 'admin';
+  if (prof && prof.updated_at && prof.dart && Object.keys(prof.dart).length && !mp._synced) {
+    Object.assign(mp, { name: prof.name, nick: prof.nick || '', country: prof.country || mp.country, age: prof.age || '', height: prof.height || '', hand: prof.hand || mp.hand, board: prof.board || mp.board, color: prof.color || mp.color });
+    mp.dart = Object.assign({}, DEFAULT_DART, prof.dart, { photos: (mp.dart && mp.dart.photos) || [] });
+    if (prof.avatar_url) mp.avatar = prof.avatar_url;
+  } else pushProfile(true);
+  mp._synced = true; save(true);
+  // globale Scheiben-Sounds vom Admin
+  const { data: st } = await sb.from('app_settings').select('*').eq('key', 'boardSounds').maybeSingle();
+  if (st && st.value && !mp.admin) { S.settings.boardSounds = st.value; save(); }
+  await loadFriends(); subscribeAll(); flushQueue(); AUTH.ready = true;
+  if (['account', 'home', 'friends'].includes(route.name)) render();
+}
+let profT = null;
+function pushProfile(now) {
+  if (!online()) return; clearTimeout(profT);
+  profT = setTimeout(async () => {
+    const p = me(); if (!p) return; const d = Object.assign({}, p.dart); delete d.photos;
+    await sb.from('profiles').update({ name: p.name, nick: p.nick, country: p.country, age: +p.age || null, height: +p.height || null, hand: p.hand, board: p.board, color: p.color, dart: d, avatar_url: p.avatar || null, updated_at: new Date().toISOString() }).eq('id', AUTH.user.id);
+  }, now ? 0 : 1500);
+}
+function pushBoardSounds() { if (online() && me().admin) sb.from('app_settings').upsert({ key: 'boardSounds', value: S.settings.boardSounds, updated_at: new Date().toISOString() }).then(() => {}); }
+
+/* ---------- Spiele in die Cloud ---------- */
+function shareablePlayers(ids) { return ids.filter(id => !String(id).startsWith('bot:')).map(id => { const p = playerById(id); if (!p) return null; const d = Object.assign({}, p.dart || {}); delete d.photos; return { id: p.id, uid: p.uid || null, name: p.name, nick: p.nick, color: p.color, country: p.country, board: p.board, dart: d }; }).filter(Boolean); }
+function queueMatch(m) {
+  const ids = m.sides ? m.sides.flatMap(s => s.members) : m.players;
+  const pl = shareablePlayers(ids); const uids = [...new Set(pl.map(p => p.uid).filter(Boolean))];
+  if (!uids.length) return;
+  S.cloudQueue = S.cloudQueue || []; S.cloudQueue.push({ id: m.id, mode: m.mode, players: uids, data: Object.assign({}, m, { pl }) }); save(); flushQueue();
+}
+async function flushQueue() {
+  if (!online() || !S.cloudQueue || !S.cloudQueue.length) return;
+  const q = [...S.cloudQueue];
+  for (const it of q) { const { error } = await sb.from('matches').upsert({ id: it.id, mode: it.mode, owner: AUTH.user.id, players: it.players, data: it.data }); if (!error || /duplicate/.test(error.message)) S.cloudQueue = S.cloudQueue.filter(x => x.id !== it.id); }
+  save();
+}
+
+/* ---------- Freunde ---------- */
+async function loadFriends() {
+  if (!online()) return;
+  const u = AUTH.user.id;
+  const { data } = await sb.from('friendships').select('user_a,user_b').or(`user_a.eq.${u},user_b.eq.${u}`);
+  const ids = (data || []).map(r => r.user_a === u ? r.user_b : r.user_a);
+  if (!ids.length) { AUTH.friends = []; return; }
+  const { data: pr } = await sb.from('profiles').select('*').in('id', ids);
+  AUTH.friends = (pr || []).filter(p => !p.banned);
+}
+function friendAsPlayer(f) {
+  let p = S.players.find(x => x.uid === f.id);
+  const d = Object.assign({}, DEFAULT_DART, f.dart || {});
+  if (!p) p = newPlayer({ name: f.name, guest: false, friend: true });
+  Object.assign(p, { uid: f.id, name: f.name, nick: f.nick || '', country: f.country || 'DE', board: f.board || p.board, color: f.color || p.color, avatar: f.avatar_url || null, dart: d, friend: true, guest: false });
+  save(); return p;
+}
+async function cloudH2H(fid) {
+  const u = AUTH.user.id;
+  const { data } = await sb.from('matches').select('id,mode,data,created_at').contains('players', [u, fid]).eq('mode', 'x01').order('created_at', { ascending: false }).limit(50);
+  const r = { w: 0, l: 0, games: [] };
+  (data || []).forEach(row => {
+    const m = row.data; if (!m || !m.finished || !m.sides) return;
+    const pidOf = uidv => (m.pl || []).find(p => p.uid === uidv);
+    const mine = pidOf(u), his = pidOf(fid); if (!mine || !his) return;
+    const si = m.sides.findIndex(s => s.members.includes(mine.id)); const oi = m.sides.findIndex(s => s.members.includes(his.id));
+    if (si < 0 || oi < 0 || si === oi) return;
+    const won = m.winner === si; won ? r.w++ : r.l++;
+    if (r.games.length < 8) r.games.push({ d: m.created, won, my: matchAvg(m, mine.id), op: matchAvg(m, his.id), score: `${m.legsWon[si]}:${m.legsWon[oi]}` });
+  });
+  return r;
+}
+
+/* ---------- Realtime: Einladungen + Chat ---------- */
+let chans = [];
+function unsubscribeAll() { chans.forEach(c => { try { sb.removeChannel(c); } catch (e) {} }); chans = []; }
+function subscribeAll() {
+  unsubscribeAll(); const u = AUTH.user.id;
+  chans.push(sb.channel('live-' + u).on('postgres_changes', { event: '*', schema: 'public', table: 'live_games' }, pl => onLiveChange(pl.new)).subscribe());
+  chans.push(sb.channel('chat-' + u).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `receiver=eq.${u}` }, pl => onChat(pl.new)).subscribe());
+  sb.from('live_games').select('*').contains('players', [u]).eq('status', 'invited').neq('host', u).then(({ data }) => (data || []).forEach(onLiveChange));
+  sb.from('chat_messages').select('sender').eq('receiver', u).is('read_at', null).then(({ data }) => { AUTH.unread = {}; (data || []).forEach(m => AUTH.unread[m.sender] = (AUTH.unread[m.sender] || 0) + 1); updateBadge(); });
+}
+function updateBadge() { const n = Object.values(AUTH.unread).reduce((a, b) => a + b, 0); const b = $('[data-nav="friends"]'); if (b) { let x = b.querySelector('.nb'); if (!x) { x = document.createElement('i'); x.className = 'nb'; b.appendChild(x); } x.textContent = n || ''; x.style.display = n ? 'grid' : 'none'; } }
+function onChat(msg) {
+  if (route.name === 'chatroom' && route.p.fid === msg.sender) { CHAT.msgs.push(msg); drawChat(); sb.from('chat_messages').update({ read_at: new Date().toISOString() }).eq('id', msg.id).then(() => {}); return; }
+  AUTH.unread[msg.sender] = (AUTH.unread[msg.sender] || 0) + 1; updateBadge();
+  const f = AUTH.friends.find(x => x.id === msg.sender); toast('💬 ' + (f ? f.name : 'Nachricht') + ': ' + msg.body.slice(0, 60), 2600); chime();
+}
+
+/* ---------- Live-Spiele ---------- */
+const LIVE = { id: null, version: 0, host: false, pushing: false, pending: false };
+function liveStripState(m) { const ids = m.sides.flatMap(s => s.members); return { match: m, players: shareablePlayers(ids) }; }
+async function startLiveMatch(sides, settings, starter) {
+  const bc = chooseBoard(sides); const m = createMatch({ sides, settings, boardId: bc.id, starter });
+  const uids = [...new Set(sides.flatMap(s => s.members).map(id => (playerById(id) || {}).uid).filter(Boolean))];
+  if (!uids.includes(AUTH.user.id)) uids.push(AUTH.user.id);
+  m.live = true; m.hostUid = AUTH.user.id;
+  const { data, error } = await sb.from('live_games').insert({ host: AUTH.user.id, players: uids, status: 'invited', state: liveStripState(m) }).select().single();
+  if (error) return toast('Fehler: ' + error.message, 3500);
+  m.liveId = data.id; LIVE.id = data.id; LIVE.version = 0; LIVE.host = true;
+  S.active = m; save(true);
+  const names = AUTH.friends.filter(f => uids.includes(f.id)).map(f => f.name).join(', ');
+  const close = modal(`<div style="text-align:center;font-size:50px" class="pulse">📡</div><h2 class="bb">Warte auf ${esc(names)}…</h2><p class="mut sm" style="text-align:center">Einladung gesendet. Sobald angenommen wird, startet das Spiel automatisch.</p><button class="btn sec" id="lgo">Trotzdem starten</button><button class="btn ghost" id="lx" style="margin-top:8px">Abbrechen</button>`, (md, c) => {
+    $('#lgo', md).onclick = () => { c(); liveSetStatus('running'); go('game', { fresh: true, why: bc.why }); };
+    $('#lx', md).onclick = () => { c(); liveSetStatus('cancelled'); S.active = null; save(); };
+  });
+  LIVE.waitClose = close;
+}
+function liveSetStatus(s) { if (LIVE.id) sb.from('live_games').update({ status: s }).eq('id', LIVE.id).then(() => {}); }
+function onLiveChange(row) {
+  if (!row || !AUTH.user) return; const u = AUTH.user.id;
+  if (row.status === 'invited' && row.host !== u && (row.players || []).includes(u)) {
+    const host = AUTH.friends.find(f => f.id === row.host); const m = row.state.match;
+    chime(); vibrate(200);
+    modal(`<div style="text-align:center;font-size:50px">🎯</div><h2 class="bb">${esc(host ? host.name : 'Ein Freund')} lädt dich ein!</h2><p style="text-align:center" class="mut">${m.settings.start} · ${m.settings.fmt === 'best' ? 'Best of' : 'First to'} ${m.settings.count} ${m.settings.unit === 'sets' ? 'Sets' : 'Legs'}<br>${esc(m.sides.map(s => s.name).join(' vs '))}</p><div class="grid2"><button class="btn sec" id="ln">Ablehnen</button><button class="btn" id="ly">Annehmen</button></div>`, (md, c) => {
+      $('#ln', md).onclick = () => { c(); sb.from('live_games').update({ status: 'cancelled' }).eq('id', row.id).then(() => {}); };
+      $('#ly', md).onclick = async () => { c(); await sb.from('live_games').update({ status: 'running' }).eq('id', row.id); joinLive(row); };
+    });
+    return;
+  }
+  if (row.id !== LIVE.id) return;
+  if (row.status === 'running' && LIVE.waitClose) { LIVE.waitClose(); LIVE.waitClose = null; toast('✅ Angenommen – Game on!'); go('game', { fresh: true }); }
+  if (row.status === 'cancelled' && LIVE.waitClose) { LIVE.waitClose(); LIVE.waitClose = null; toast('Einladung abgelehnt'); S.active = null; save(); return; }
+  if (row.version > LIVE.version && row.state && row.state.match) applyRemote(row);
+}
+function mergeRemotePlayers(pl) { (pl || []).forEach(rp => { if (rp.uid && AUTH.user && rp.uid === AUTH.user.id) return; let p = S.players.find(x => x.id === rp.id); if (!p) { p = { id: rp.id, guest: true, remote: true }; S.players.push(p); } Object.assign(p, rp, { dart: Object.assign({}, DEFAULT_DART, rp.dart) }); }); }
+function joinLive(row) {
+  mergeRemotePlayers(row.state.players);
+  // eigenen Spieler (Host-ID) auf mich abbilden
+  const mine = row.state.players.find(p => p.uid === AUTH.user.id);
+  if (mine && mine.id !== S.me) { S.aliases = S.aliases || {}; S.aliases[mine.id] = S.me; }
+  LIVE.id = row.id; LIVE.version = row.version; LIVE.host = false;
+  S.active = Object.assign(row.state.match, { liveId: row.id }); save(true); G = null;
+  go('game', { fresh: true });
+}
+function controlsCurrent(m) {
+  if (!m.live) return true;
+  const pid = curPid(m); const p = playerById(pid);
+  if (String(pid).startsWith('bot:')) return m.hostUid === AUTH.user?.id;
+  if (p && p.uid) return AUTH.user && (p.uid === AUTH.user.id || (S.aliases && S.aliases[pid] === S.me));
+  return m.hostUid === (AUTH.user && AUTH.user.id); // Gäste steuert der Host
+}
+function livePush() {
+  const m = S.active; if (!m || !m.live || !online()) return;
+  if (LIVE.pushing) { LIVE.pending = true; return; }
+  LIVE.pushing = true; LIVE.version++;
+  sb.from('live_games').update({ state: liveStripState(m), version: LIVE.version, status: m.finished ? 'finished' : 'running', updated_at: new Date().toISOString() }).eq('id', m.liveId).then(() => { LIVE.pushing = false; if (LIVE.pending) { LIVE.pending = false; livePush(); } });
+}
+function dartCount(m) { return m.legs.reduce((a, l) => a + l.visits.reduce((b, v) => b + v.darts.length, 0), 0) + m.cur.darts.length; }
+function applyRemote(row) {
+  LIVE.version = row.version;
+  const nm = row.state.match; mergeRemotePlayers(row.state.players);
+  const old = S.active; S.active = Object.assign(nm, { liveId: row.id });
+  if (route.name !== 'game' || !G) { save(); return; }
+  const before = old ? dartCount(old) : 0, after = dartCount(nm);
+  G.m = S.active; G.hist = [];
+  if (after === before + 1) {
+    let d = null, vend = null;
+    if (nm.cur.darts.length) d = nm.cur.darts[nm.cur.darts.length - 1];
+    else { const leg = [...nm.legs].reverse().find(l => l.visits.length); if (leg) { vend = leg.visits[leg.visits.length - 1]; d = vend.darts[vend.darts.length - 1]; } }
+    if (d) { const ms = animateThrow(d.x != null ? [d.x, d.y] : pointFor(d.n, d.m), vend ? vend.pid : curPid(nm), nm.cur.darts.slice(0, -1), nm.boardId, dLabelFull(d.n, d.m), $('#bin'), G.stuck); setTimeout(() => impact(nm.boardId, d.n === 0), ms); }
+    if (vend) { say(vend.bust ? CALL.bust() : CALL.score(vend.scored)); G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100); }
+    renderGame();
+  } else { renderGame(); redrawStuck(); }
+  if (nm.finished && !old.finished) { G.m = S.active; finishMatch(); }
+  else maybeBot();
+}
+
+/* ---------- Gast-Übernahme ---------- */
+async function uploadGuestClaim(p) {
+  if (!online()) return toast('Bitte einloggen');
+  const ms = S.matches.filter(m => m.sides && m.sides.some(s => s.members.includes(p.id)));
+  const g = Object.assign({}, p); delete g.avatar; if (g.dart) { g.dart = Object.assign({}, g.dart); delete g.dart.photos; }
+  const { error } = await sb.from('guest_claims').upsert({ code: p.linkCode, created_by: AUTH.user.id, guest: g, matches: ms });
+  toast(error ? 'Fehler: ' + error.message : 'Code aktiviert: ' + p.linkCode, 2600);
+}
+async function redeemGuestClaim(code) {
+  const { data, error } = await sb.from('guest_claims').select('*').eq('code', code.trim().toUpperCase()).maybeSingle();
+  if (error || !data) return toast('Code nicht gefunden');
+  if (data.claimed_by && data.claimed_by !== AUTH.user.id) return toast('Code wurde schon eingelöst');
+  const gid = data.guest.id; let n = 0;
+  (data.matches || []).forEach(m => { if (S.matches.some(x => x.id === m.id)) return; const s = JSON.stringify(m).split('"' + gid + '"').join('"' + S.me + '"'); S.matches.push(JSON.parse(s)); n++; });
+  await sb.from('guest_claims').update({ claimed_by: AUTH.user.id }).eq('code', data.code);
+  save(true); toast(`✅ ${n} Spiele übernommen`, 2600);
+}
+
+/* ================= VIEWS ================= */
+V.account = () => {
+  if (!sb) return { title: 'ONLINE', left: backBtn(), right: spacer, tab: 'friends', html: `<div class="empty">Keine Verbindung zum Server.<br>Prüfe deine Internetverbindung und öffne die App neu.</div>` };
+  if (!AUTH.user) {
+    const inv = (() => { try { return localStorage.getItem('dsz_invite') || ''; } catch (e) { return ''; } })();
+    const mode = route.p.mode || (inv ? 'reg' : 'login');
+    return {
+      title: 'ONLINE', tab: 'friends', left: backBtn(), right: spacer,
+      html: `<div class="card" style="text-align:center"><div style="font-size:46px">🌍</div><p class="mut sm">Mit Account: Freunde, Live-Spiele auf zwei Handys, Chat und Statistiken in der Cloud.</p></div>
+      <div class="seg"><button data-m="login" class="${mode === 'login' ? 'on' : ''}">Login</button><button data-m="reg" class="${mode === 'reg' ? 'on' : ''}">Registrieren</button></div>
+      <div class="card">${mode === 'reg' ? `<div class="field"><label>Name</label><input id="an" type="text" value="${esc(me() ? me().name : '')}"></div>` : ''}
+      <div class="field"><label>E-Mail</label><input id="ae" type="email" autocomplete="email"></div><div class="field"><label>Passwort</label><input id="ap" type="password" autocomplete="${mode === 'reg' ? 'new-password' : 'current-password'}"></div>
+      ${mode === 'reg' ? `<div class="field"><label>Einladungscode</label><input id="ai" type="text" value="${esc(inv)}" placeholder="vom Admin erhalten" style="text-transform:uppercase"></div>` : ''}
+      <button class="btn" id="ago">${mode === 'reg' ? 'Account erstellen' : 'Einloggen'}</button>${mode === 'login' ? '<button class="btn ghost" id="afg" style="margin-top:8px">Passwort vergessen</button>' : ''}</div>`,
+      mount(r) {
+        on(r, '[data-m]', 'click', b => go('account', { mode: b.dataset.m }));
+        $('#ago', r).onclick = async () => {
+          const email = $('#ae', r).value.trim(), pw = $('#ap', r).value; if (!email || pw.length < 6) return toast('E-Mail und Passwort (mind. 6 Zeichen)');
+          const btn = $('#ago', r); btn.textContent = '…';
+          if (mode === 'login') { const { error } = await sb.auth.signInWithPassword({ email, password: pw }); if (error) { btn.textContent = 'Einloggen'; return toast(error.message.includes('Invalid') ? 'E-Mail oder Passwort falsch' : error.message, 3000); } go('friends'); return; }
+          const code = $('#ai', r).value.trim().toUpperCase();
+          const { data: need } = await sb.rpc('needs_invite');
+          if (need) { if (!code) { btn.textContent = 'Account erstellen'; return toast('Einladungscode nötig'); } const { data: ok } = await sb.rpc('check_invite', { p_code: code }); if (!ok) { btn.textContent = 'Account erstellen'; return toast('Einladungscode ungültig oder abgelaufen', 3000); } try { localStorage.setItem('dsz_invite', code); } catch (e) {} }
+          const { data, error } = await sb.auth.signUp({ email, password: pw, options: { data: { name: $('#an', r).value.trim() || 'Spieler' }, emailRedirectTo: location.origin } });
+          if (error) { btn.textContent = 'Account erstellen'; return toast(error.message, 3500); }
+          if (!data.session) modal(`<h2 class="bb">Fast geschafft!</h2><p>Bestätige deine E-Mail über den Link, den wir dir geschickt haben. Danach hier einloggen.</p><button class="btn" onclick="this.closest('.modal-bg').remove()">OK</button>`);
+          else go('friends');
+        };
+        $('#afg', r) && ($('#afg', r).onclick = async () => { const email = $('#ae', r).value.trim(); if (!email) return toast('E-Mail eingeben'); await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin }); toast('Link zum Zurücksetzen gesendet'); });
+      }
+    };
+  }
+  const isA = AUTH.profile && AUTH.profile.role === 'admin';
+  return {
+    title: 'ACCOUNT', tab: 'friends', left: backBtn('friends'), right: spacer,
+    html: `<div class="card row">${avatar(me())}<div class="sp"><b>${esc(me().name)}</b><div class="mut sm">${esc(AUTH.user.email)}</div></div>${isA ? '<span class="badge or">ADMIN</span>' : ''}</div>
+      <div class="card"><b>Gast-Code einlösen</b><div class="mut sm">Hast du vorher als Gast gespielt? Code eingeben, um deine Spiele zu übernehmen.</div><div class="row" style="margin-top:8px"><input id="gc" type="text" placeholder="z. B. AB12CD" style="text-transform:uppercase"><button class="btn sm" id="gcok">OK</button></div></div>
+      ${isA ? `<div class="lbl">Admin · Einladungen</div><div class="card"><div class="row"><span class="sp sm">Gültig für</span><select id="iu" style="width:auto"><option value="1">1 Person</option><option value="5">5 Personen</option><option value="25" selected>25 Personen</option></select></div><button class="btn" id="inew" style="margin-top:10px">＋ Einladungslink erstellen</button><div id="ilist" class="list" style="margin-top:8px"></div></div>
+      <div class="lbl">Admin · Nutzer</div><div class="card list" id="ulist"><div class="mut sm">Lade…</div></div>` : ''}
+      <button class="btn ghost" id="alo" style="color:#f87171">Ausloggen</button>`,
+    mount(r) {
+      $('#alo', r).onclick = async () => { await sb.auth.signOut(); go('home'); };
+      $('#gcok', r).onclick = () => redeemGuestClaim($('#gc', r).value);
+      if (!isA) return;
+      const link = c => `${location.origin}/?invite=${c}`;
+      const loadInv = async () => { const { data } = await sb.from('invites').select('*').order('created_at', { ascending: false }).limit(10); $('#ilist', r).innerHTML = (data || []).map(i => `<div class="it"><div class="sp"><b class="bb" style="font-size:22px;letter-spacing:2px">${i.code}</b><div class="mut xs">${i.uses}/${i.max_uses} genutzt · bis ${new Date(i.expires_at).toLocaleDateString('de-DE')}</div></div><button class="btn sm sec" data-cp="${i.code}">Link kopieren</button><button class="btn sm sec" data-del="${i.code}">✕</button></div>`).join('') || '<div class="mut sm">Noch keine Einladungen</div>'; };
+      const loadUsers = async () => { const { data } = await sb.from('profiles').select('id,name,role,banned,country,created_at').order('created_at'); $('#ulist', r).innerHTML = (data || []).map(u => `<div class="it"><div class="sp"><b>${esc(u.name)}</b> ${flag(u.country)}<div class="mut xs">${u.role === 'admin' ? 'Admin' : 'Nutzer'} · seit ${new Date(u.created_at).toLocaleDateString('de-DE')}</div></div>${u.id !== AUTH.user.id ? `<button class="btn sm ${u.banned ? '' : 'sec'}" data-ban="${u.id}" data-b="${u.banned ? 1 : 0}">${u.banned ? 'Entsperren' : 'Sperren'}</button>` : ''}</div>`).join(''); };
+      loadInv(); loadUsers();
+      $('#inew', r).onclick = async () => { const { data, error } = await sb.from('invites').insert({ created_by: AUTH.user.id, max_uses: +$('#iu', r).value }).select().single(); if (error) return toast(error.message, 3000); await copyText(link(data.code)); loadInv(); };
+      on(r, '[data-cp]', 'click', b => copyText(link(b.dataset.cp)));
+      on(r, '[data-del]', 'click', async b => { await sb.from('invites').delete().eq('code', b.dataset.del); loadInv(); });
+      on(r, '[data-ban]', 'click', async b => { await sb.from('profiles').update({ banned: b.dataset.b !== '1' }).eq('id', b.dataset.ban); loadUsers(); });
+    }
+  };
+};
+async function copyText(t) {
+  try { if (navigator.share && /iPhone|iPad|Android/i.test(navigator.userAgent)) { await navigator.share({ title: 'Dartsportz', text: 'Komm zu Dartsportz! 🎯', url: t }); return; } } catch (e) {}
+  try { await navigator.clipboard.writeText(t); toast('Link kopiert'); } catch (e) { modal(`<h2 class="bb">Link</h2><input type="text" value="${esc(t)}" onclick="this.select()">`); }
+}
+V.friends = () => {
+  if (!AUTH.user) return V.account({});
+  return {
+    title: 'FREUNDE', left: backBtn(), right: `<button class="ic" onclick="go('account')">👤</button>`,
+    html: `<div class="card list">${AUTH.friends.map(f => `<div class="it">${avatar({ name: f.name, color: f.color, avatar: f.avatar_url }, 's')}<div class="sp"><b>${esc(f.name)}</b> ${flag(f.country)}<div class="mut xs" data-h2h="${f.id}">…</div></div><button class="btn sm sec" data-chat="${f.id}" style="position:relative">💬${AUTH.unread[f.id] ? `<i class="nb" style="display:grid">${AUTH.unread[f.id]}</i>` : ''}</button><button class="btn sm" data-fp="${f.id}">🎯</button></div>`).join('') || '<div class="mut sm">Noch keine Freunde. Lade jemanden ein oder suche nach Namen.</div>'}</div>
+      <div class="lbl">Freund hinzufügen</div><div class="card"><div class="row"><input id="fs" type="text" placeholder="Name suchen"><button class="btn sm" id="fsok">Suchen</button></div><div id="fres" class="list"></div></div>`,
+    async mount(r) {
+      on(r, '[data-chat]', 'click', b => go('chatroom', { fid: b.dataset.chat }));
+      on(r, '[data-fp]', 'click', b => { const f = AUTH.friends.find(x => x.id === b.dataset.fp); const p = friendAsPlayer(f); const su = getSetup(); if (!su.players.includes(p.id)) su.players.push(p.id); save(); toast(f.name + ' zum Spiel hinzugefügt'); go('play'); });
+      $('#fsok', r).onclick = async () => { const q = $('#fs', r).value.trim(); if (q.length < 2) return; const { data } = await sb.from('profiles').select('id,name,country,color').ilike('name', '%' + q + '%').neq('id', AUTH.user.id).limit(10); $('#fres', r).innerHTML = (data || []).map(p => `<div class="it"><b class="sp">${esc(p.name)} ${flag(p.country)}</b>${AUTH.friends.some(f => f.id === p.id) ? '<span class="mut sm">Freund</span>' : `<button class="btn sm" data-add="${p.id}">＋</button>`}</div>`).join('') || '<div class="mut sm">Niemand gefunden</div>'; };
+      on(r, '[data-add]', 'click', async b => { const u = AUTH.user.id, o = b.dataset.add; await sb.from('friendships').insert({ user_a: u < o ? u : o, user_b: u < o ? o : u }); await loadFriends(); render(); });
+      await loadFriends();
+      for (const f of AUTH.friends) { cloudH2H(f.id).then(x => { const el = $(`[data-h2h="${f.id}"]`); if (el) el.innerHTML = x.w + x.l ? `Bilanz <b style="color:${x.w >= x.l ? 'var(--ok)' : 'var(--bad)'}">${x.w}:${x.l}</b> · zuletzt ${x.games.slice(0, 3).map(g => g.won ? '🟢' : '🔴').join('')} Ø ${x.games[0] ? fmt(x.games[0].my) : '–'}` : 'Noch keine Spiele'; }); }
+    }
+  };
+};
+const CHAT = { msgs: [], fid: null };
+V.chatroom = (p) => {
+  const f = AUTH.friends.find(x => x.id === p.fid) || { name: '?' };
+  return {
+    title: esc(f.name).toUpperCase(), tab: 'friends', left: backBtn('friends'), right: spacer, nav: false,
+    html: `<div id="cm" style="display:flex;flex-direction:column;padding-bottom:80px"></div><div style="position:fixed;left:0;right:0;bottom:0;padding:10px 12px calc(10px + var(--safe-b));background:var(--bg2);display:flex;gap:8px;max-width:820px;margin:0 auto"><input id="ct" type="text" placeholder="Nachricht…" style="border-radius:999px"><button class="btn sm" id="cs">➤</button></div>`,
+    async mount(r) {
+      CHAT.fid = p.fid; CHAT.msgs = [];
+      const u = AUTH.user.id;
+      const { data } = await sb.from('chat_messages').select('*').or(`and(sender.eq.${u},receiver.eq.${p.fid}),and(sender.eq.${p.fid},receiver.eq.${u})`).order('created_at').limit(200);
+      CHAT.msgs = data || []; drawChat();
+      sb.from('chat_messages').update({ read_at: new Date().toISOString() }).eq('receiver', u).eq('sender', p.fid).is('read_at', null).then(() => {}); delete AUTH.unread[p.fid]; updateBadge();
+      const send = async () => { const t = $('#ct').value.trim(); if (!t) return; $('#ct').value = ''; const { data: m, error } = await sb.from('chat_messages').insert({ sender: u, receiver: p.fid, body: t }).select().single(); if (error) return toast(error.message); CHAT.msgs.push(m); drawChat(); };
+      $('#cs').onclick = send; $('#ct').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+    }
+  };
+};
+function drawChat() {
+  const el = $('#cm'); if (!el) return; const u = AUTH.user.id;
+  el.innerHTML = CHAT.msgs.map(m => `<div class="chat-msg" style="align-self:${m.sender === u ? 'flex-end' : 'flex-start'};background:${m.sender === u ? 'var(--or)' : 'var(--card2)'}">${esc(m.body)}<div class="xs" style="opacity:.6;text-align:right">${new Date(m.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</div></div>`).join('') || '<div class="empty">Schreib die erste Nachricht 👋</div>';
+  window.scrollTo(0, document.body.scrollHeight);
 }
 
 /* ================= KARRIERE ================= */
@@ -1547,7 +1869,7 @@ function periodFilter() {
 V.stats = () => {
   statUI.pid = statUI.pid && S.players.some(p => p.id === statUI.pid) ? statUI.pid : S.me;
   const pf = periodFilter(); const pid = statUI.pid;
-  const pl = S.players.map(p => `<button class="pl" data-pid="${p.id}" style="opacity:${p.id === pid ? 1 : .45}">${avatar(p, 's')}<div class="nm">${esc(pName(p))}</div></button>`).join('');
+  const pl = S.players.filter(p => !p.remote).map(p => `<button class="pl" data-pid="${p.id}" style="opacity:${p.id === pid ? 1 : .45}">${avatar(p, 's')}<div class="nm">${esc(pName(p))}</div></button>`).join('');
   let body = '';
   if (statUI.tab === 'x01') {
     const t = statsFor(pid, pf.f);
@@ -1590,7 +1912,7 @@ V.stats = () => {
 
 /* ================= PROFIL / SPIELER ================= */
 V.user = () => {
-  const p = me(); const guests = S.players.filter(x => x.id !== S.me);
+  const p = me(); const guests = S.players.filter(x => x.id !== S.me && !x.remote && !x.friend);
   return {
     title: 'PROFIL', left: backBtn(), right: `<button class="ic" onclick="go('settings')">⚙</button>`,
     html: `<div class="card" style="text-align:center"><div style="display:flex;justify-content:center">${avatar(p)}</div><h2 class="bb" style="font-size:34px;margin:8px 0 0">${esc(p.name)} ${flag(p.country)}</h2><div class="mut sm">${[p.nick && '„' + esc(p.nick) + '“', p.age && p.age + ' Jahre', p.height && p.height + ' cm', p.hand && (p.hand === 'links' ? 'Linkshänder' : 'Rechtshänder')].filter(Boolean).join(' · ')}</div>
@@ -1616,10 +1938,11 @@ function editPlayer(pid, done) {
     <div class="grid2" style="margin:0"><div class="field"><label>Alter</label><input id="pa" type="number" inputmode="numeric" value="${esc(p.age)}"></div><div class="field"><label>Größe (cm)</label><input id="ph" type="number" inputmode="numeric" value="${esc(p.height)}"></div></div>
     <div class="field"><label>Wurfhand</label><div class="seg" style="margin:0"><button data-hand="rechts" class="${p.hand === 'rechts' ? 'on' : ''}">Rechts</button><button data-hand="links" class="${p.hand === 'links' ? 'on' : ''}">Links</button></div></div>
     <div class="field"><label>Lieblingsscheibe</label><div class="grid2" style="grid-template-columns:repeat(5,1fr);gap:6px">${BOARDS.map(b => `<button data-bd="${b.id}" style="border-radius:50%;padding:2px;border:3px solid ${b.id === p.board ? 'var(--or)' : 'transparent'}" title="${esc(b.name)}">${boardSVG(b, { numbers: false })}</button>`).join('')}</div><div class="sm" id="pbn" style="text-align:center;margin-top:4px">${esc(boardById(p.board).name)}</div></div>
-    ${p.guest ? `<div class="card" style="background:var(--card2)"><b>Account-Übernahme</b><div class="mut sm">Wenn ${esc(p.name)} sich später registriert, überträgt dieser Code alle Spiele & Statistiken auf seinen Account:</div><div class="bb" style="font-size:34px;color:var(--or);letter-spacing:3px;text-align:center">${p.linkCode}</div></div>` : ''}
+    ${p.guest ? `<div class="card" style="background:var(--card2)"><b>Account-Übernahme</b><div class="mut sm">Wenn ${esc(p.name)} sich später registriert, überträgt dieser Code alle Spiele & Statistiken auf seinen Account:</div><div class="bb" style="font-size:34px;color:var(--or);letter-spacing:3px;text-align:center">${p.linkCode}</div><button class="btn sm sec" id="gcl" style="width:100%">☁️ Code mit Spielen hochladen</button></div>` : ''}
     <div class="grid2"><button class="btn sec" id="pd">🎯 Pfeile</button><button class="btn" id="ps">Speichern</button></div>
     ${p.guest ? '<button class="btn ghost" id="pdel" style="color:#f87171">Gast löschen</button>' : ''}`, (m, close) => {
-    const sv = () => { p.name = $('#pn', m).value.trim() || p.name; p.nick = $('#pni', m).value.trim(); p.country = $('#pc', m).value; p.age = $('#pa', m).value; p.height = $('#ph', m).value; p.color = $('#pco', m).value; save(); };
+    const sv = () => { p.name = $('#pn', m).value.trim() || p.name; p.nick = $('#pni', m).value.trim(); p.country = $('#pc', m).value; p.age = $('#pa', m).value; p.height = $('#ph', m).value; p.color = $('#pco', m).value; save(); if (p.id === S.me) pushProfile(); };
+    $('#gcl', m) && ($('#gcl', m).onclick = () => uploadGuestClaim(p));
     on(m, '[data-hand]', 'click', b => { p.hand = b.dataset.hand; $$('[data-hand]', m).forEach(x => x.classList.toggle('on', x === b)); });
     on(m, '[data-bd]', 'click', b => { p.board = b.dataset.bd; $$('[data-bd]', m).forEach(x => x.style.borderColor = x === b ? 'var(--or)' : 'transparent'); $('#pbn', m).textContent = boardById(p.board).name; });
     $('#ps', m).onclick = () => { sv(); close(); done && done(); };
@@ -1651,8 +1974,8 @@ V.darts = (p) => {
         <div class="row" style="margin-top:8px"><span class="sp sm">Logo auf dem Flight</span><button class="btn sm sec" id="flogo">${d.flightLogo ? 'Ändern' : 'Hochladen'}</button>${d.flightLogo ? '<button class="btn sm sec" id="flogox">✕</button>' : ''}</div></div>
       <div class="lbl">Fotos deiner echten Pfeile</div><div class="card"><div class="photos">${(d.photos || []).map((ph, i) => `<img src="${ph}" data-ph="${i}">`).join('')}</div><button class="btn sec" id="padd" style="margin-top:10px">📷 Foto hinzufügen</button><div class="xs mut" style="margin-top:6px">Max. 4 Fotos · Tippen zum Löschen</div></div>`,
     mount(r) {
-      const upd = () => { save(); $('#dp', r).innerHTML = dartSVG(d, 'dz' + Math.random().toString(36).slice(2, 5)); };
-      on(r, '[data-k]', 'click', b => { d[b.dataset.k] = b.dataset.v; save(); render(); });
+      const upd = () => { save(); if (pl.id === S.me) pushProfile(); $('#dp', r).innerHTML = dartSVG(d, 'dz' + Math.random().toString(36).slice(2, 5)); };
+      on(r, '[data-k]', 'click', b => { d[b.dataset.k] = b.dataset.v; save(); if (pl.id === S.me) pushProfile(); render(); });
       r.addEventListener('input', e => {
         const t = e.target;
         if (t.dataset.r) { d[t.dataset.r] = +t.value; $('#l_' + t.dataset.r, r).textContent = t.value; upd(); }
@@ -1697,14 +2020,14 @@ V.settings = () => {
     html: `<div class="card">${settingsBlock()}</div>
     ${p.admin ? `<div class="lbl">Admin · Scheiben-Sounds</div><div class="card list">${BOARDS.map(b => { const cur = S.settings.boardSounds[b.id] || b.sound; const custom = cur.startsWith('data:'); return `<div class="it"><div style="width:34px;height:34px;flex:none">${boardSVG(b, { numbers: false })}</div><div class="sp"><b class="sm">${esc(b.name)}</b><select data-bs="${b.id}" style="padding:6px;margin-top:4px;font-size:14px">${Object.entries(SOUND_PRESETS).map(([k, v]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${v.label}</option>`).join('')}${custom ? '<option selected value="__c">Eigene Aufnahme</option>' : ''}</select></div><button class="btn sm sec" data-up="${b.id}">⤒</button><button class="btn sm sec" data-play="${b.id}">▶</button></div>`; }).join('')}<div class="xs mut" style="margin-top:8px">Mit ⤒ lädst du eine eigene Aufnahme hoch (kurze Audiodatei). Die Synchronisation an alle Nutzer folgt mit Supabase.</div></div>` : ''}
     <div class="lbl">Daten</div><div class="card"><div class="grid2"><button class="btn sec" id="bex">Backup kopieren</button><button class="btn sec" id="bim">Backup einfügen</button></div><button class="btn ghost" id="breset" style="color:#f87171">Alle Daten löschen</button></div>
-    <div class="lbl">Online & Login</div><div class="card"><p class="mut sm" style="margin:0">Login, Einladungslinks, Freundesliste, Nutzer sperren und Live-Sync kommen in Schritt 2 mit Supabase. Deine lokalen Daten werden dann übernommen.</p></div>
-    <p class="xs dim" style="text-align:center">Dartsportz v0.1 · offline-fähig</p>`,
+    <div class="lbl">Online & Login</div><button class="card row" style="width:100%" onclick="go('account')"><span style="font-size:24px">🌍</span><div class="sp" style="text-align:left"><b>${AUTH.user ? 'Eingeloggt' : 'Login / Registrieren'}</b><div class="mut sm">${AUTH.user ? esc(AUTH.user.email) : 'Freunde, Live-Spiele, Chat'}</div></div><span class="mut">›</span></button>
+    <p class="xs dim" style="text-align:center">Dartsportz v0.3 · offline-fähig</p>`,
     mount(r) {
       bindSettings(r);
       on(r, '[data-bs]', 'change', () => {});
-      r.addEventListener('change', e => { const b = e.target.dataset.bs; if (b && e.target.value !== '__c') { S.settings.boardSounds[b] = e.target.value; save(); impact(b); } });
+      r.addEventListener('change', e => { const b = e.target.dataset.bs; if (b && e.target.value !== '__c') { S.settings.boardSounds[b] = e.target.value; save(); impact(b); pushBoardSounds(); } });
       on(r, '[data-play]', 'click', b => impact(b.dataset.play));
-      on(r, '[data-up]', 'click', async b => { const f = await pickFile('audio/*'); if (!f) return; if (f.size > 400000) return toast('Datei zu groß (max. 400 KB)'); const rd = new FileReader(); rd.onload = () => { S.settings.boardSounds[b.dataset.up] = rd.result; save(); impact(b.dataset.up); render(); }; rd.readAsDataURL(f); });
+      on(r, '[data-up]', 'click', async b => { const f = await pickFile('audio/*'); if (!f) return; if (f.size > 400000) return toast('Datei zu groß (max. 400 KB)'); const rd = new FileReader(); rd.onload = () => { S.settings.boardSounds[b.dataset.up] = rd.result; save(); impact(b.dataset.up); pushBoardSounds(); render(); }; rd.readAsDataURL(f); });
       $('#bex', r).onclick = async () => { const txt = JSON.stringify(S); try { await navigator.clipboard.writeText(txt); toast('Backup kopiert (' + Math.round(txt.length / 1024) + ' KB)'); } catch (e) { modal(`<h2 class="bb">Backup</h2><textarea rows="8">${esc(txt)}</textarea>`); } };
       $('#bim', r).onclick = () => modal(`<h2 class="bb">Backup einfügen</h2><textarea id="bt" rows="8" placeholder="Backup-Text hier einfügen"></textarea><div style="height:10px"></div><button class="btn" id="bok">Wiederherstellen</button>`, (m, close) => { $('#bok', m).onclick = () => { try { const d = JSON.parse($('#bt', m).value); if (!d.players) throw 0; Object.keys(S).forEach(k => delete S[k]); Object.assign(S, loadStoreFrom(d)); save(true); close(); toast('Wiederhergestellt'); go('home'); } catch (e) { toast('Ungültiges Backup'); } }; });
       $('#breset', r).onclick = async () => { if (await confirmBox('Wirklich ALLE Daten löschen?', 'Löschen')) { try { localStorage.removeItem(LS_KEY); } catch (e) {} Object.keys(S).forEach(k => delete S[k]); Object.assign(S, loadStoreFrom({})); G = null; go('welcome'); } };
@@ -1715,6 +2038,7 @@ function loadStoreFrom(d) { const x = Object.assign({}, d); x.players = x.player
 
 /* ================= START ================= */
 document.addEventListener('click', () => ac(), { once: true });
+cloudInit();
 render();
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claudeusercontent|claude\.ai/.test(location.host)) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script></body></html>

@@ -24,13 +24,13 @@ V.game = (p) => {
     <div class="brow"><button id="gu">↶</button><button class="miss" id="gm">FALSCH</button><button id="grules">?</button></div></div></div>`,
     mount(r) {
       sizeBoard(); renderGame();
-      const press = (n, mu) => { if (G.busy || isBotTurn()) return; vibrate(8); throwDart(n, mu, null, true); };
+      const press = (n, mu) => { if (G.busy || isBotTurn()) return; if (!controlsCurrent(G.m)) return toast('Warte auf ' + pName(playerById(curPid(G.m))) + ' …'); vibrate(8); throwDart(n, mu, null, true); };
       on(r, '[data-n]', 'click', b => press(+b.dataset.n, G.mult));
       on(r, '[data-b]', 'click', b => press(25, b.dataset.b === '50' ? 2 : 1));
       on(r, '[data-mu]', 'click', b => { G.mult = +b.dataset.mu; renderMult(); });
       $('#gm').onclick = () => press(0, 0);
       $('#gu').onclick = undo;
-      $('#vsub').onclick = () => { if (isBotTurn() || G.busy || G.m.finished) return; let r0, k = 0; do { r0 = throwDart(0, 0, null, true, true); } while (r0 && !r0.ended && ++k < 3); };
+      $('#vsub').onclick = () => { if (isBotTurn() || G.busy || G.m.finished || !controlsCurrent(G.m)) return; let r0, k = 0; do { r0 = throwDart(0, 0, null, true, true); } while (r0 && !r0.ended && ++k < 3); };
       $('#grules').onclick = () => showRules('x01');
       $('#gx').onclick = () => { stopTimers(); save(true); go('home'); };
       $('#gst').onclick = liveStats;
@@ -72,7 +72,7 @@ function renderGame() {
       ${co ? `<div class="co">${co.map(dLabel).join(' · ')}</div>` : ''}</div>`;
   }).join('');
   const sd = m.sides[c.side], pp = playerById(curPid(m));
-  $('#who').innerHTML = m.finished ? 'SPIEL BEENDET' : `${esc(pName(pp)).toUpperCase()} IST AM ZUG!${sd.bot ? ' <span class="pulse">🤖</span>' : ''}`;
+  $('#who').innerHTML = m.finished ? 'SPIEL BEENDET' : `${esc(pName(pp)).toUpperCase()} IST AM ZUG!${sd.bot ? ' <span class="pulse">🤖</span>' : ''}${m.live ? (controlsCurrent(m) ? ' <span style="font-size:14px;color:var(--ok)">● LIVE</span>' : ' <span class="pulse" style="font-size:14px">📡 wirft gerade</span>') : ''}`;
   for (let i = 0; i < 3; i++) $('#v' + i).innerHTML = dartBox(c.darts[i]);
   $('#vt').textContent = visitSoFar(m);
   renderMult();
@@ -128,7 +128,7 @@ function throwDart(n, mu, pt, human, silent) {
   if (!silent) setTimeout(() => impact(bid, n === 0), ms);
   const res = addDart(m, n, mu, pt);
   if (human) G.mult = 1;
-  renderGame(); save();
+  renderGame(); save(); livePush();
   if (res.ended) afterVisit(res, side);
   return res;
 }
@@ -171,6 +171,7 @@ function botSays(L, ev) {
 function introBubble() { const bot = G.m.sides.find(s => s.bot); if (bot) setTimeout(() => botSays(bot.bot.level, 'intro'), 900); }
 function maybeBot() {
   if (!G || !isBotTurn() || G.busy) return;
+  if (G.m.live && !controlsCurrent(G.m)) return;
   G.busy = true; const m = G.m, side = m.cur.side, L = m.sides[side].bot.level;
   const step = (first) => {
     G.timers.push(setTimeout(() => {
@@ -194,12 +195,15 @@ function undo() {
   if (!snap.human && !G.hist.length) { /* nur Bot-Würfe */ }
   const restored = JSON.parse(snap.s); S.active = restored; G.m = restored; save();
   if (G.clearT) { clearTimeout(G.clearT); G.clearT = null; }
-  renderGame(); redrawStuck(); vibrate(20);
+  renderGame(); redrawStuck(); vibrate(20); livePush();
   if (!snap.human) maybeBot();
 }
 function finishMatch() {
-  const m = G.m; stopTimers();
-  S.matches.push(m); S.active = null;
+  let m = G.m; stopTimers();
+  if (m.live && S.aliases) { let js = JSON.stringify(m); Object.entries(S.aliases).forEach(([a, b]) => { js = js.split('"' + a + '"').join('"' + b + '"'); }); m = G.m = JSON.parse(js); }
+  if (!S.matches.some(x => x.id === m.id)) S.matches.push(m); S.active = null;
+  if (!m.live || m.hostUid === (AUTH.user && AUTH.user.id)) queueMatch(m);
+  if (m.live) { livePush(); LIVE.id = null; }
   let careerMsg = '';
   if (m.career) {
     const L = m.career, won = !m.sides[m.winner].bot;

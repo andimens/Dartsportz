@@ -203,7 +203,7 @@ function pNext() {
 function pFinish() {
   const P = PG.P, g = PARTY[P.mode]; if (P.finished) return;
   P.finished = true; P.winner = g.over(P); P.ended = Date.now();
-  S.party = S.party || []; S.party.push(P); S.pactive = null; save(true); chime(true);
+  S.party = S.party || []; S.party.push(P); S.pactive = null; save(true); chime(true); queueMatch(P);
   const w = playerById(P.players[P.winner]);
   say(S.settings.caller === 'en' ? `Game shot! ${pName(w)} wins!` : `${pName(w)} gewinnt!`);
   setTimeout(() => modal(`<div style="text-align:center;font-size:56px">🏆</div><h2 class="bb">${esc(pName(w))} gewinnt!</h2><p class="mut" style="text-align:center">${g.name}</p><div class="grid2"><button class="btn sec" id="pd">Fertig</button><button class="btn" id="pr">Nochmal</button></div>`, (m, close) => {

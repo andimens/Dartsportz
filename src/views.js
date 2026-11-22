@@ -147,7 +147,7 @@ function periodFilter() {
 V.stats = () => {
   statUI.pid = statUI.pid && S.players.some(p => p.id === statUI.pid) ? statUI.pid : S.me;
   const pf = periodFilter(); const pid = statUI.pid;
-  const pl = S.players.map(p => `<button class="pl" data-pid="${p.id}" style="opacity:${p.id === pid ? 1 : .45}">${avatar(p, 's')}<div class="nm">${esc(pName(p))}</div></button>`).join('');
+  const pl = S.players.filter(p => !p.remote).map(p => `<button class="pl" data-pid="${p.id}" style="opacity:${p.id === pid ? 1 : .45}">${avatar(p, 's')}<div class="nm">${esc(pName(p))}</div></button>`).join('');
   let body = '';
   if (statUI.tab === 'x01') {
     const t = statsFor(pid, pf.f);
@@ -190,7 +190,7 @@ V.stats = () => {
 
 /* ================= PROFIL / SPIELER ================= */
 V.user = () => {
-  const p = me(); const guests = S.players.filter(x => x.id !== S.me);
+  const p = me(); const guests = S.players.filter(x => x.id !== S.me && !x.remote && !x.friend);
   return {
     title: 'PROFIL', left: backBtn(), right: `<button class="ic" onclick="go('settings')">⚙</button>`,
     html: `<div class="card" style="text-align:center"><div style="display:flex;justify-content:center">${avatar(p)}</div><h2 class="bb" style="font-size:34px;margin:8px 0 0">${esc(p.name)} ${flag(p.country)}</h2><div class="mut sm">${[p.nick && '„' + esc(p.nick) + '“', p.age && p.age + ' Jahre', p.height && p.height + ' cm', p.hand && (p.hand === 'links' ? 'Linkshänder' : 'Rechtshänder')].filter(Boolean).join(' · ')}</div>
@@ -216,10 +216,11 @@ function editPlayer(pid, done) {
     <div class="grid2" style="margin:0"><div class="field"><label>Alter</label><input id="pa" type="number" inputmode="numeric" value="${esc(p.age)}"></div><div class="field"><label>Größe (cm)</label><input id="ph" type="number" inputmode="numeric" value="${esc(p.height)}"></div></div>
     <div class="field"><label>Wurfhand</label><div class="seg" style="margin:0"><button data-hand="rechts" class="${p.hand === 'rechts' ? 'on' : ''}">Rechts</button><button data-hand="links" class="${p.hand === 'links' ? 'on' : ''}">Links</button></div></div>
     <div class="field"><label>Lieblingsscheibe</label><div class="grid2" style="grid-template-columns:repeat(5,1fr);gap:6px">${BOARDS.map(b => `<button data-bd="${b.id}" style="border-radius:50%;padding:2px;border:3px solid ${b.id === p.board ? 'var(--or)' : 'transparent'}" title="${esc(b.name)}">${boardSVG(b, { numbers: false })}</button>`).join('')}</div><div class="sm" id="pbn" style="text-align:center;margin-top:4px">${esc(boardById(p.board).name)}</div></div>
-    ${p.guest ? `<div class="card" style="background:var(--card2)"><b>Account-Übernahme</b><div class="mut sm">Wenn ${esc(p.name)} sich später registriert, überträgt dieser Code alle Spiele & Statistiken auf seinen Account:</div><div class="bb" style="font-size:34px;color:var(--or);letter-spacing:3px;text-align:center">${p.linkCode}</div></div>` : ''}
+    ${p.guest ? `<div class="card" style="background:var(--card2)"><b>Account-Übernahme</b><div class="mut sm">Wenn ${esc(p.name)} sich später registriert, überträgt dieser Code alle Spiele & Statistiken auf seinen Account:</div><div class="bb" style="font-size:34px;color:var(--or);letter-spacing:3px;text-align:center">${p.linkCode}</div><button class="btn sm sec" id="gcl" style="width:100%">☁️ Code mit Spielen hochladen</button></div>` : ''}
     <div class="grid2"><button class="btn sec" id="pd">🎯 Pfeile</button><button class="btn" id="ps">Speichern</button></div>
     ${p.guest ? '<button class="btn ghost" id="pdel" style="color:#f87171">Gast löschen</button>' : ''}`, (m, close) => {
-    const sv = () => { p.name = $('#pn', m).value.trim() || p.name; p.nick = $('#pni', m).value.trim(); p.country = $('#pc', m).value; p.age = $('#pa', m).value; p.height = $('#ph', m).value; p.color = $('#pco', m).value; save(); };
+    const sv = () => { p.name = $('#pn', m).value.trim() || p.name; p.nick = $('#pni', m).value.trim(); p.country = $('#pc', m).value; p.age = $('#pa', m).value; p.height = $('#ph', m).value; p.color = $('#pco', m).value; save(); if (p.id === S.me) pushProfile(); };
+    $('#gcl', m) && ($('#gcl', m).onclick = () => uploadGuestClaim(p));
     on(m, '[data-hand]', 'click', b => { p.hand = b.dataset.hand; $$('[data-hand]', m).forEach(x => x.classList.toggle('on', x === b)); });
     on(m, '[data-bd]', 'click', b => { p.board = b.dataset.bd; $$('[data-bd]', m).forEach(x => x.style.borderColor = x === b ? 'var(--or)' : 'transparent'); $('#pbn', m).textContent = boardById(p.board).name; });
     $('#ps', m).onclick = () => { sv(); close(); done && done(); };
@@ -251,8 +252,8 @@ V.darts = (p) => {
         <div class="row" style="margin-top:8px"><span class="sp sm">Logo auf dem Flight</span><button class="btn sm sec" id="flogo">${d.flightLogo ? 'Ändern' : 'Hochladen'}</button>${d.flightLogo ? '<button class="btn sm sec" id="flogox">✕</button>' : ''}</div></div>
       <div class="lbl">Fotos deiner echten Pfeile</div><div class="card"><div class="photos">${(d.photos || []).map((ph, i) => `<img src="${ph}" data-ph="${i}">`).join('')}</div><button class="btn sec" id="padd" style="margin-top:10px">📷 Foto hinzufügen</button><div class="xs mut" style="margin-top:6px">Max. 4 Fotos · Tippen zum Löschen</div></div>`,
     mount(r) {
-      const upd = () => { save(); $('#dp', r).innerHTML = dartSVG(d, 'dz' + Math.random().toString(36).slice(2, 5)); };
-      on(r, '[data-k]', 'click', b => { d[b.dataset.k] = b.dataset.v; save(); render(); });
+      const upd = () => { save(); if (pl.id === S.me) pushProfile(); $('#dp', r).innerHTML = dartSVG(d, 'dz' + Math.random().toString(36).slice(2, 5)); };
+      on(r, '[data-k]', 'click', b => { d[b.dataset.k] = b.dataset.v; save(); if (pl.id === S.me) pushProfile(); render(); });
       r.addEventListener('input', e => {
         const t = e.target;
         if (t.dataset.r) { d[t.dataset.r] = +t.value; $('#l_' + t.dataset.r, r).textContent = t.value; upd(); }
@@ -297,14 +298,14 @@ V.settings = () => {
     html: `<div class="card">${settingsBlock()}</div>
     ${p.admin ? `<div class="lbl">Admin · Scheiben-Sounds</div><div class="card list">${BOARDS.map(b => { const cur = S.settings.boardSounds[b.id] || b.sound; const custom = cur.startsWith('data:'); return `<div class="it"><div style="width:34px;height:34px;flex:none">${boardSVG(b, { numbers: false })}</div><div class="sp"><b class="sm">${esc(b.name)}</b><select data-bs="${b.id}" style="padding:6px;margin-top:4px;font-size:14px">${Object.entries(SOUND_PRESETS).map(([k, v]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${v.label}</option>`).join('')}${custom ? '<option selected value="__c">Eigene Aufnahme</option>' : ''}</select></div><button class="btn sm sec" data-up="${b.id}">⤒</button><button class="btn sm sec" data-play="${b.id}">▶</button></div>`; }).join('')}<div class="xs mut" style="margin-top:8px">Mit ⤒ lädst du eine eigene Aufnahme hoch (kurze Audiodatei). Die Synchronisation an alle Nutzer folgt mit Supabase.</div></div>` : ''}
     <div class="lbl">Daten</div><div class="card"><div class="grid2"><button class="btn sec" id="bex">Backup kopieren</button><button class="btn sec" id="bim">Backup einfügen</button></div><button class="btn ghost" id="breset" style="color:#f87171">Alle Daten löschen</button></div>
-    <div class="lbl">Online & Login</div><div class="card"><p class="mut sm" style="margin:0">Login, Einladungslinks, Freundesliste, Nutzer sperren und Live-Sync kommen in Schritt 2 mit Supabase. Deine lokalen Daten werden dann übernommen.</p></div>
-    <p class="xs dim" style="text-align:center">Dartsportz v0.1 · offline-fähig</p>`,
+    <div class="lbl">Online & Login</div><button class="card row" style="width:100%" onclick="go('account')"><span style="font-size:24px">🌍</span><div class="sp" style="text-align:left"><b>${AUTH.user ? 'Eingeloggt' : 'Login / Registrieren'}</b><div class="mut sm">${AUTH.user ? esc(AUTH.user.email) : 'Freunde, Live-Spiele, Chat'}</div></div><span class="mut">›</span></button>
+    <p class="xs dim" style="text-align:center">Dartsportz v0.3 · offline-fähig</p>`,
     mount(r) {
       bindSettings(r);
       on(r, '[data-bs]', 'change', () => {});
-      r.addEventListener('change', e => { const b = e.target.dataset.bs; if (b && e.target.value !== '__c') { S.settings.boardSounds[b] = e.target.value; save(); impact(b); } });
+      r.addEventListener('change', e => { const b = e.target.dataset.bs; if (b && e.target.value !== '__c') { S.settings.boardSounds[b] = e.target.value; save(); impact(b); pushBoardSounds(); } });
       on(r, '[data-play]', 'click', b => impact(b.dataset.play));
-      on(r, '[data-up]', 'click', async b => { const f = await pickFile('audio/*'); if (!f) return; if (f.size > 400000) return toast('Datei zu groß (max. 400 KB)'); const rd = new FileReader(); rd.onload = () => { S.settings.boardSounds[b.dataset.up] = rd.result; save(); impact(b.dataset.up); render(); }; rd.readAsDataURL(f); });
+      on(r, '[data-up]', 'click', async b => { const f = await pickFile('audio/*'); if (!f) return; if (f.size > 400000) return toast('Datei zu groß (max. 400 KB)'); const rd = new FileReader(); rd.onload = () => { S.settings.boardSounds[b.dataset.up] = rd.result; save(); impact(b.dataset.up); pushBoardSounds(); render(); }; rd.readAsDataURL(f); });
       $('#bex', r).onclick = async () => { const txt = JSON.stringify(S); try { await navigator.clipboard.writeText(txt); toast('Backup kopiert (' + Math.round(txt.length / 1024) + ' KB)'); } catch (e) { modal(`<h2 class="bb">Backup</h2><textarea rows="8">${esc(txt)}</textarea>`); } };
       $('#bim', r).onclick = () => modal(`<h2 class="bb">Backup einfügen</h2><textarea id="bt" rows="8" placeholder="Backup-Text hier einfügen"></textarea><div style="height:10px"></div><button class="btn" id="bok">Wiederherstellen</button>`, (m, close) => { $('#bok', m).onclick = () => { try { const d = JSON.parse($('#bt', m).value); if (!d.players) throw 0; Object.keys(S).forEach(k => delete S[k]); Object.assign(S, loadStoreFrom(d)); save(true); close(); toast('Wiederhergestellt'); go('home'); } catch (e) { toast('Ungültiges Backup'); } }; });
       $('#breset', r).onclick = async () => { if (await confirmBox('Wirklich ALLE Daten löschen?', 'Löschen')) { try { localStorage.removeItem(LS_KEY); } catch (e) {} Object.keys(S).forEach(k => delete S[k]); Object.assign(S, loadStoreFrom({})); G = null; go('welcome'); } };
@@ -315,5 +316,6 @@ function loadStoreFrom(d) { const x = Object.assign({}, d); x.players = x.player
 
 /* ================= START ================= */
 document.addEventListener('click', () => ac(), { once: true });
+cloudInit();
 render();
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claudeusercontent|claude\.ai/.test(location.host)) navigator.serviceWorker.register('sw.js').catch(() => {});
