@@ -193,7 +193,7 @@ input[type=color]{width:44px;height:36px;border:0;border-radius:10px;background:
 /* ================= STORE ================= */
 const LS_KEY = 'dartsportz_v1';
 let mem = null;
-const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', voiceEngine: 'pro', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
+const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', callEach: false, voiceEngine: 'pro', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
 function loadStore() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) {}
@@ -1194,6 +1194,7 @@ function throwDart(n, mu, pt, human, silent) {
   const bid = m.boardId;
   if (!silent) setTimeout(() => impact(bid, n === 0), ms);
   const res = addDart(m, n, mu, pt);
+  if (S.settings.callEach && !silent && n > 0) setTimeout(() => callout('score', n * (n === 0 ? 0 : mu)), ms);
   if (human) G.mult = 1;
   renderGame(); save(); livePush();
   if (res.ended) afterVisit(res, side);
@@ -1516,6 +1517,7 @@ function pThrow(n, mu, silent) {
   const pt = pointFor(n, mu), pid = P.players[P.cur];
   if (!silent) { const ms = animateThrow(pt, pid, P.darts, P.boardId, dLabelFull(n, mu), $('#bin'), PG.stuck); setTimeout(() => impact(P.boardId, n === 0), ms); }
   const res = g.dart(P, n, mu) || {};
+  if (S.settings.callEach && !silent && n > 0) callout('score', n * mu);
   P.darts.push({ n, m: mu, x: +pt[0].toFixed(1), y: +pt[1].toFixed(1) });
   PG.mult = 1;
   if (res.msg) { toast(res.msg, 1600); say(res.msg.replace(/[^\p{L}\p{N} !]/gu, '')); }
@@ -1772,6 +1774,7 @@ function applyRemote(row) {
     let d = null, vend = null;
     if (nm.cur.darts.length) d = nm.cur.darts[nm.cur.darts.length - 1];
     else { const leg = [...nm.legs].reverse().find(l => l.visits.length); if (leg) { vend = leg.visits[leg.visits.length - 1]; d = vend.darts[vend.darts.length - 1]; } }
+    if (d && S.settings.callEach && d.n > 0) callout('score', d.n * d.m);
     if (d) { const ms = animateThrow(d.x != null ? [d.x, d.y] : pointFor(d.n, d.m), vend ? vend.pid : curPid(nm), nm.cur.darts.slice(0, -1), nm.boardId, dLabelFull(d.n, d.m), $('#bin'), G.stuck); setTimeout(() => impact(nm.boardId, d.n === 0), ms); }
     if (vend) { callout(vend.bust ? 'bust' : 'score', vend.scored); G.clearT = setTimeout(() => { clearStuck(); G.clearT = null; }, 1100); }
     renderGame();
@@ -2244,10 +2247,12 @@ function settingsBlock() {
   return `<div class="lbl">Wurfanimation</div>${seg('anim', [['off', 'Aus'], ['fast', 'Schnell'], ['normal', 'Normal'], ['slow', 'Langsam']])}
     ${sw('sound', 'Aufprall-Sound')}<div class="field"><label>Lautstärke</label><input type="range" min="0" max="1" step=".05" value="${s.volume}" data-vol></div>
     ${sw('zoom', 'Großansicht beim Wurf (Hintergrund unscharf)')}
-    <div class="lbl">Ansager</div>${seg('caller', [['off', 'Aus'], ['de', 'Deutsch'], ['en', 'Englisch']])}
+    <div class="lbl">Ansager</div>
+    <div class="row" style="margin:10px 0"><span class="sp">Wie soll der Caller dich nennen?</span><button class="btn sm sec" data-callname>🎤 ${esc(me() ? (CALL_NAMES.find(n => callSlug(n) === (me().callName || (me().dart && me().dart.callName))) || (me().callName === '' ? 'ohne Namen' : 'wählen')) : 'wählen')}</button></div>${seg('caller', [['off', 'Aus'], ['de', 'Deutsch'], ['en', 'Englisch']])}
     ${s.caller !== 'off' ? `<div class="field"><label>Sprachausgabe</label><div class="seg" style="margin:0"><button data-s="voiceEngine" data-v="pro" class="${s.voiceEngine === 'pro' ? 'on' : ''}">🔥 Profi-Caller</button><button data-s="voiceEngine" data-v="device" class="${s.voiceEngine === 'device' ? 'on' : ''}">📱 Gerät</button></div><div class="xs mut" id="prost" style="margin-top:4px"></div></div>` : ''}
     ${s.caller !== 'off' && s.voiceEngine === 'device' ? `<div class="field"><label>Stimme</label><select data-voice="${s.caller}">${voicesFor(s.caller).sort((a, b) => voiceScore(b) - voiceScore(a)).map(v => `<option value="${esc(v.voiceURI)}" ${bestVoice(s.caller) === v ? 'selected' : ''}>${esc(v.name)}${voiceScore(v) >= 30 ? ' ⭐' : ''}</option>`).join('') || '<option>Systemstimme</option>'}</select></div>` : ''}
     <button class="btn sm sec" data-test>🔊 Test</button>
+    ${sw('callEach', 'Jeden Dart einzeln ansagen')}
     ${sw('botVoice', 'Bots sprechen (Sprachausgabe)')}${sw('vibrate', 'Vibration')}`;
 }
 function bindSettings(m) {
@@ -2256,6 +2261,7 @@ function bindSettings(m) {
   on(m, '[data-s="voiceEngine"]', 'click', () => { if (!m.closest('.modal-bg')) setTimeout(render, 10); });
   m.addEventListener('change', e => { const l = e.target.dataset.voice; if (l) { S.settings[l === 'en' ? 'voiceEn' : 'voiceDe'] = e.target.value; save(); say(CALL.score(180), null, { flush: true }); } });
   on(m, '[data-s="caller"]', 'click', () => { const bg = m.closest('.modal-bg'); if (!bg) setTimeout(render, 10); });
+  on(m, '[data-callname]', 'click', () => { const bg = m.closest('.modal-bg'); if (bg) bg.remove(); pickCallName(me(), () => { if (!bg) render(); }); });
   on(m, '[data-test]', 'click', () => { impact(me().board); setTimeout(() => callout('score', 180, '', { flush: true }), 200); });
   const ps = $('#prost', m); if (ps) proManifest(S.settings.caller).then(man => { ps.textContent = man ? `Profi-Caller bereit (${man.keys.length} Ansagen)` : 'Profi-Caller nicht geladen – Internet beim ersten Mal nötig. Bis dahin spricht die Gerätestimme.'; });
   m.addEventListener('input', e => { if (e.target.dataset.vol != null) { S.settings.volume = +e.target.value; save(); } });

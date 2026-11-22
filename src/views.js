@@ -310,10 +310,12 @@ function settingsBlock() {
   return `<div class="lbl">Wurfanimation</div>${seg('anim', [['off', 'Aus'], ['fast', 'Schnell'], ['normal', 'Normal'], ['slow', 'Langsam']])}
     ${sw('sound', 'Aufprall-Sound')}<div class="field"><label>Lautstärke</label><input type="range" min="0" max="1" step=".05" value="${s.volume}" data-vol></div>
     ${sw('zoom', 'Großansicht beim Wurf (Hintergrund unscharf)')}
-    <div class="lbl">Ansager</div>${seg('caller', [['off', 'Aus'], ['de', 'Deutsch'], ['en', 'Englisch']])}
+    <div class="lbl">Ansager</div>
+    <div class="row" style="margin:10px 0"><span class="sp">Wie soll der Caller dich nennen?</span><button class="btn sm sec" data-callname>🎤 ${esc(me() ? (CALL_NAMES.find(n => callSlug(n) === (me().callName || (me().dart && me().dart.callName))) || (me().callName === '' ? 'ohne Namen' : 'wählen')) : 'wählen')}</button></div>${seg('caller', [['off', 'Aus'], ['de', 'Deutsch'], ['en', 'Englisch']])}
     ${s.caller !== 'off' ? `<div class="field"><label>Sprachausgabe</label><div class="seg" style="margin:0"><button data-s="voiceEngine" data-v="pro" class="${s.voiceEngine === 'pro' ? 'on' : ''}">🔥 Profi-Caller</button><button data-s="voiceEngine" data-v="device" class="${s.voiceEngine === 'device' ? 'on' : ''}">📱 Gerät</button></div><div class="xs mut" id="prost" style="margin-top:4px"></div></div>` : ''}
     ${s.caller !== 'off' && s.voiceEngine === 'device' ? `<div class="field"><label>Stimme</label><select data-voice="${s.caller}">${voicesFor(s.caller).sort((a, b) => voiceScore(b) - voiceScore(a)).map(v => `<option value="${esc(v.voiceURI)}" ${bestVoice(s.caller) === v ? 'selected' : ''}>${esc(v.name)}${voiceScore(v) >= 30 ? ' ⭐' : ''}</option>`).join('') || '<option>Systemstimme</option>'}</select></div>` : ''}
     <button class="btn sm sec" data-test>🔊 Test</button>
+    ${sw('callEach', 'Jeden Dart einzeln ansagen')}
     ${sw('botVoice', 'Bots sprechen (Sprachausgabe)')}${sw('vibrate', 'Vibration')}`;
 }
 function bindSettings(m) {
@@ -322,6 +324,7 @@ function bindSettings(m) {
   on(m, '[data-s="voiceEngine"]', 'click', () => { if (!m.closest('.modal-bg')) setTimeout(render, 10); });
   m.addEventListener('change', e => { const l = e.target.dataset.voice; if (l) { S.settings[l === 'en' ? 'voiceEn' : 'voiceDe'] = e.target.value; save(); say(CALL.score(180), null, { flush: true }); } });
   on(m, '[data-s="caller"]', 'click', () => { const bg = m.closest('.modal-bg'); if (!bg) setTimeout(render, 10); });
+  on(m, '[data-callname]', 'click', () => { const bg = m.closest('.modal-bg'); if (bg) bg.remove(); pickCallName(me(), () => { if (!bg) render(); }); });
   on(m, '[data-test]', 'click', () => { impact(me().board); setTimeout(() => callout('score', 180, '', { flush: true }), 200); });
   const ps = $('#prost', m); if (ps) proManifest(S.settings.caller).then(man => { ps.textContent = man ? `Profi-Caller bereit (${man.keys.length} Ansagen)` : 'Profi-Caller nicht geladen – Internet beim ersten Mal nötig. Bis dahin spricht die Gerätestimme.'; });
   m.addEventListener('input', e => { if (e.target.dataset.vol != null) { S.settings.volume = +e.target.value; save(); } });

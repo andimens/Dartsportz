@@ -2,7 +2,7 @@
 /* ================= STORE ================= */
 const LS_KEY = 'dartsportz_v1';
 let mem = null;
-const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', voiceEngine: 'pro', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
+const DEFAULT_SETTINGS = { anim: 'normal', sound: true, volume: 0.8, caller: 'de', callEach: false, voiceEngine: 'pro', botVoice: true, zoom: true, voiceDe: '', voiceEn: '', vibrate: true, boardSounds: {}, input: 'pad' };
 function loadStore() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) {}

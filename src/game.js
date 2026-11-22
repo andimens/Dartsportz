@@ -142,6 +142,7 @@ function throwDart(n, mu, pt, human, silent) {
   const bid = m.boardId;
   if (!silent) setTimeout(() => impact(bid, n === 0), ms);
   const res = addDart(m, n, mu, pt);
+  if (S.settings.callEach && !silent && n > 0) setTimeout(() => callout('score', n * (n === 0 ? 0 : mu)), ms);
   if (human) G.mult = 1;
   renderGame(); save(); livePush();
   if (res.ended) afterVisit(res, side);
