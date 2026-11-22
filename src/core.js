@@ -13,6 +13,7 @@ function loadStore() {
   d.training = d.training || [];
   d.career = d.career || { best: 0, results: {} };
   d.settings = Object.assign({}, DEFAULT_SETTINGS, d.settings || {});
+  if (d.settings.voiceEngine === 'ai') d.settings.voiceEngine = 'pro';
   d.me = d.me || null;
   d.boardRot = d.boardRot || {};
   return d;
@@ -177,22 +178,39 @@ const SOUND_PRESETS = {
 let AC = null;
 function ac() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (AC && AC.state === 'suspended') AC.resume(); return AC; }
 const customSounds = {};
+// Aufprall-Sound: einmal sauber vorberechnet (weich, ohne Übersteuern)
+const IMPACT_BUFS = {};
+function impactBuffer(a, key, p, miss) {
+  const k = key + (miss ? ':m' : ''); if (IMPACT_BUFS[k]) return IMPACT_BUFS[k];
+  const sr = a.sampleRate, len = Math.floor(sr * 0.22), buf = a.createBuffer(1, len, sr), d = buf.getChannelData(0);
+  const f0 = miss ? p.thud * .7 : p.thud, tauB = p.dec * .55, tauN = miss ? .02 : .009;
+  const lp = Math.exp(-2 * Math.PI * Math.min(p.noise, 4500) * (miss ? .3 : .55) / sr);
+  let ph = 0, n1 = 0, n2 = 0, seed = 12345;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x3fffffff - 1; };
+  for (let i = 0; i < len; i++) {
+    const t = i / sr, att = Math.min(1, t / .0018);
+    const f = f0 * (1 + .9 * Math.exp(-t / .012)); ph += 2 * Math.PI * f / sr;
+    const body = Math.sin(ph) * Math.exp(-t / tauB) * .75;
+    n1 = n1 * lp + rnd() * (1 - lp); n2 = n2 * lp + n1 * (1 - lp); // 2-pol Tiefpass gegen Kratzen
+    const thock = n2 * 6 * Math.exp(-t / tauN) * p.click;
+    const ring = p.ring && !miss ? Math.sin(2 * Math.PI * p.ring * t) * Math.exp(-t / .06) * .06 : 0;
+    d[i] = att * (body + thock + ring) * (miss ? .55 : 1);
+  }
+  let peak = 0; for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
+  const norm = .8 / (peak || 1); for (let i = 0; i < len; i++) d[i] *= norm;
+  for (let i = len - 400; i < len; i++) d[i] *= (len - i) / 400; // sauberes Ausklingen
+  return (IMPACT_BUFS[k] = buf);
+}
 function impact(boardId, miss) {
   if (!S.settings.sound) return;
   const a = ac(); if (!a) return;
   const vol = S.settings.volume;
   const bs = S.settings.boardSounds[boardId];
   if (bs && bs.startsWith('data:')) { playData(bs, vol); return; }
-  const p = SOUND_PRESETS[bs || boardById(boardId).sound] || SOUND_PRESETS.satt;
-  const t = a.currentTime, g = a.createGain(); g.connect(a.destination);
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol * (miss ? .5 : 1), t + .004); g.gain.exponentialRampToValueAtTime(.001, t + p.dec + .05);
-  const o = a.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(p.thud * 1.8, t); o.frequency.exponentialRampToValueAtTime(p.thud * (miss ? .6 : 1), t + .04);
-  const og = a.createGain(); og.gain.value = .9; o.connect(og); og.connect(g); o.start(t); o.stop(t + p.dec + .06);
-  const len = Math.floor(a.sampleRate * (p.dec + .03)); const buf = a.createBuffer(1, len, a.sampleRate); const d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4);
-  const ns = a.createBufferSource(); ns.buffer = buf; const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = miss ? 800 : p.noise; f.Q.value = p.q;
-  const ng = a.createGain(); ng.gain.value = p.click; ns.connect(f); f.connect(ng); ng.connect(g); ns.start(t);
-  if (p.ring && !miss) { const r = a.createOscillator(); r.type = 'triangle'; r.frequency.value = p.ring; const rg = a.createGain(); rg.gain.setValueAtTime(vol * .05, t); rg.gain.exponentialRampToValueAtTime(.0005, t + .25); r.connect(rg); rg.connect(a.destination); r.start(t); r.stop(t + .26); }
+  const key = bs || boardById(boardId).sound; const p = SOUND_PRESETS[key] || SOUND_PRESETS.satt;
+  const src = a.createBufferSource(); src.buffer = impactBuffer(a, key, p, miss);
+  src.playbackRate.value = 0.97 + Math.random() * .06;
+  const g = a.createGain(); g.gain.value = vol * .9; src.connect(g); g.connect(a.destination); src.start();
 }
 function playData(url, vol) {
   const a = ac(); if (!a) return;
@@ -212,27 +230,7 @@ try { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; } catch (e) {}
 function voicesFor(lang) { return voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(lang)); }
 function voiceScore(v) { const n = (v.name + ' ' + (v.voiceURI || '')).toLowerCase(); let s = 0; if (/premium/.test(n)) s += 50; if (/enhanced|erweitert|verbessert/.test(n)) s += 40; if (/siri/.test(n)) s += 35; if (/neural|natural|online/.test(n)) s += 30; if (/google/.test(n)) s += 20; if (/compact|kompakt|espeak/.test(n)) s -= 30; if (/(grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|albert|bad news)/.test(n)) s -= 100; return s; }
 function bestVoice(lang) { const key = lang === 'en' ? 'voiceEn' : 'voiceDe'; const list = voicesFor(lang); const chosen = S.settings[key] && list.find(v => v.voiceURI === S.settings[key]); if (chosen) return chosen; return list.sort((a, b) => voiceScore(b) - voiceScore(a))[0]; }
-/* ---------- Natürliche KI-Stimme (Piper, läuft offline im Browser) ---------- */
-const PIPER_VOICES = { de: 'de_DE-thorsten-medium', en: 'en_GB-alan-medium' };
-const PIPER = { mod: null, cache: new Map(), q: Promise.resolve(), tok: 0, ready: {} };
-async function piperMod() { if (!PIPER.mod) PIPER.mod = await import('https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm'); return PIPER.mod; }
-async function piperInstalled(lang) { if (PIPER.ready[lang]) return true; try { const m = await piperMod(); const st = await m.stored(); PIPER.ready[lang] = st.includes(PIPER_VOICES[lang]); } catch (e) { return false; } return PIPER.ready[lang]; }
-async function piperDownload(lang, onp) { const m = await piperMod(); await m.download(PIPER_VOICES[lang], p => onp && p.total && onp(p.loaded / p.total)); PIPER.ready[lang] = true; }
-async function piperBuffer(text, lang) {
-  const key = lang + '|' + text; if (PIPER.cache.has(key)) return PIPER.cache.get(key);
-  const m = await piperMod(); const wav = await m.predict({ text, voiceId: PIPER_VOICES[lang] });
-  const buf = await ac().decodeAudioData(await wav.arrayBuffer());
-  if (PIPER.cache.size > 300) PIPER.cache.delete(PIPER.cache.keys().next().value);
-  PIPER.cache.set(key, buf); return buf;
-}
-function piperPlay(buf, rate) { return new Promise(res => { const a = ac(); const s = a.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate || 1; const g = a.createGain(); g.gain.value = Math.min(1, S.settings.volume * 1.4); s.connect(g); g.connect(a.destination); s.onended = res; s.start(); setTimeout(res, buf.duration * 1000 / (rate || 1) + 300); }); }
-function piperSay(text, lang, opts) {
-  if (opts.flush) PIPER.tok++;
-  const tok = PIPER.tok; const p = piperBuffer(text, lang); p.catch(() => {});
-  PIPER.q = PIPER.q.then(async () => { if (tok !== PIPER.tok) return; try { const b = await p; if (tok === PIPER.tok) await piperPlay(b, opts.rate); } catch (e) { webSay(text, lang, opts); } });
-}
-// häufige Ansagen vorab berechnen, damit sie sofort kommen
-async function piperWarmup(lang) { try { for (const n of [180, 140, 100, 60, 45, 26, 0]) await piperBuffer(CALL.score(n), lang); } catch (e) {} }
+function playBuf(buf, rate) { return new Promise(res => { const a = ac(); const s = a.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate || 1; const g = a.createGain(); g.gain.value = Math.min(1, S.settings.volume * 1.3); s.connect(g); g.connect(a.destination); s.onended = res; s.start(); setTimeout(res, buf.duration * 1000 / (rate || 1) + 300); }); }
 /* ---------- Profi-Ansager: vorab aufgenommene Clips (ElevenLabs) ---------- */
 const PRO = { man: {}, bufs: new Map(), q: Promise.resolve(), tok: 0 };
 async function proManifest(lang) {
@@ -248,7 +246,7 @@ async function proBuf(lang, key) {
 function proPlay(lang, keys, opts = {}) {
   if (opts.flush) PRO.tok++; const tok = PRO.tok;
   const ps = keys.map(k => proBuf(lang, k)); ps.forEach(p => p.catch(() => {}));
-  PRO.q = PRO.q.then(async () => { for (const p of ps) { if (tok !== PRO.tok) return; try { await piperPlay(await p, 1); } catch (e) {} } });
+  PRO.q = PRO.q.then(async () => { for (const p of ps) { if (tok !== PRO.tok) return; try { await playBuf(await p, 1); } catch (e) {} } });
 }
 const CALL_NAMES = ["Harm", "Daniel", "Andreas", "Andi", "Vero", "Benny", "Tan", "Peter", "Anna", "Mary", "Levi", "Sephora", "Rahel", "Zeki", "Alex", "Ben", "Chris", "David", "Dennis", "Dominik", "Eric", "Felix", "Florian", "Jan", "Jonas", "Julian", "Kevin", "Lukas", "Marcel", "Marco", "Mario", "Markus", "Martin", "Max", "Michael", "Nico", "Niklas", "Patrick", "Paul", "Phil", "Robin", "Sascha", "Sebastian", "Simon", "Stefan", "Sven", "Thomas", "Tim", "Tobias", "Tom", "Kai", "Mike", "Leon", "Elias", "Noah", "Finn", "Luca", "Emre", "Can", "Mehmet", "Ali", "Murat", "Julia", "Lisa", "Laura", "Lena", "Sarah", "Lea", "Marie", "Sophie", "Hannah", "Nina", "Jana", "Katharina", "Melanie", "Sandra", "Jessica", "Michelle", "Vanessa", "Svenja", "Tina", "Kim", "Mia", "Emma", "Lara", "Selin", "Ayse"];
 const callSlug = s => String(s || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
@@ -286,7 +284,6 @@ function callout(kind, n, name, opts = {}) {
 }
 function say(text, lang, opts = {}) {
   lang = lang || S.settings.caller; if (!lang || lang === 'off') return;
-  if ((S.settings.voiceEngine === 'ai' || S.settings.voiceEngine === 'pro') && PIPER.ready[lang]) return piperSay(text, lang, opts);
   webSay(text, lang, opts);
 }
 function webSay(text, lang, opts = {}) {
