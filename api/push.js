@@ -1,9 +1,9 @@
 // Sendet Push-Benachrichtigungen an einen Freund (Vercel Serverless Function)
 const webpush = require('web-push');
 
-const SB = process.env.SUPABASE_URL;
-const SECRET = process.env.SUPABASE_SECRET_KEY;          // sb_secret_… (nur hier, nie im Browser)
-const PUB = process.env.VAPID_PUBLIC_KEY;
+const SB = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vsreutpxuwckyvycelwt.supabase.co';
+const SECRET = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY; // nur hier, nie im Browser
+const PUB = process.env.VAPID_PUBLIC_KEY || 'BMlc2UaOCeAyQ6AqmYAiJTSAiRkG_0Rf57AfLNL6Z0Sapwd6gseOsogvRlaXdeg2IeLue_kgqEgEcdSExQ8Dr14';
 const PRIV = process.env.VAPID_PRIVATE_KEY;
 
 async function rest(path, opts = {}) {
